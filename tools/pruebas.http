@@ -1,0 +1,153 @@
+# Peticiones de prueba para la extensión "REST Client" de VS Code (humao.rest-client).
+# Encima de cada petición aparece "Send Request": haz clic y verás la respuesta a la derecha.
+# Requisitos: base local encendida (npm run db:up), migrada y con seed, y la API corriendo (npm run start:dev).
+# Funciona con AUTH_MODE=demo: el usuario se elige con la cabecera x-demo-user.
+
+@api = http://localhost:3001/api/v1
+@ana = ana.asociado@demo.com
+@luis = luis.lider@demo.com
+@carlos = carlos.spoc@demo.com
+@admin = admin@demo.com
+# Pasado mañana (las reservas piden 24 h de anticipación). 15:00Z = 10:00 en Ecuador.
+@dia = {{$datetime "YYYY-MM-DD" 2 d}}
+
+### 1. Salud: ¿la API ve la base?
+GET {{api}}/health
+
+### 2. Mi perfil (como Ana)
+GET {{api}}/me
+x-demo-user: {{ana}}
+
+### 3. Catálogo completo (edificio > sala o laboratorio > laptops)
+# @name arbol
+GET {{api}}/catalog/tree
+x-demo-user: {{ana}}
+
+### 4. Salas y laboratorios: guarda los ids para las siguientes peticiones
+# @name recursos
+GET {{api}}/resources
+x-demo-user: {{ana}}
+
+@salaId = {{recursos.response.body.$[?(@.name == 'Sala Pichincha')].id}}
+@salaCotopaxiId = {{recursos.response.body.$[?(@.name == 'Sala Cotopaxi')].id}}
+@labId = {{recursos.response.body.$[?(@.name == 'Laboratorio IA 1')].id}}
+@laptopId = {{recursos.response.body.$[?(@.name == 'LAP-IA-01')].id}}
+
+### 5. ¿Qué está libre ese día?
+GET {{api}}/availability/search?from={{dia}}T13:00:00Z&to={{dia}}T23:00:00Z&type=MEETING_ROOM
+x-demo-user: {{ana}}
+
+### 6. Ana reserva la Sala Pichincha (queda CONFIRMED)
+# @name reservaSala
+POST {{api}}/reservations
+x-demo-user: {{ana}}
+Content-Type: application/json
+
+{
+  "resourceId": "{{salaId}}",
+  "startDateTime": "{{dia}}T15:00:00Z",
+  "endDateTime": "{{dia}}T16:00:00Z",
+  "purpose": "INTERNAL_MEETING",
+  "justification": "Planificación del sprint"
+}
+
+### 7. Doble reserva del mismo horario: debe responder 409 SLOT_TAKEN
+POST {{api}}/reservations
+x-demo-user: {{luis}}
+Content-Type: application/json
+
+{
+  "resourceId": "{{salaId}}",
+  "startDateTime": "{{dia}}T15:30:00Z",
+  "endDateTime": "{{dia}}T16:30:00Z",
+  "purpose": "INTERNAL_MEETING",
+  "justification": "Prueba de choque"
+}
+
+### 8. Ana reserva una laptop
+POST {{api}}/reservations
+x-demo-user: {{ana}}
+Content-Type: application/json
+
+{
+  "resourceId": "{{laptopId}}",
+  "startDateTime": "{{dia}}T17:00:00Z",
+  "endDateTime": "{{dia}}T18:00:00Z",
+  "purpose": "INTERNAL_MEETING",
+  "justification": "Prueba de modelo"
+}
+
+### 9. Laboratorio completo a la misma hora que la laptop: 409 (la laptop ya está tomada)
+POST {{api}}/reservations
+x-demo-user: {{luis}}
+Content-Type: application/json
+
+{
+  "resourceId": "{{labId}}",
+  "startDateTime": "{{dia}}T17:00:00Z",
+  "endDateTime": "{{dia}}T19:00:00Z",
+  "purpose": "CLIENT_MEETING",
+  "justification": "Demo con cliente"
+}
+
+### 10. Entrenamiento en el laboratorio completo: queda PENDING_APPROVAL
+# @name entrenamiento
+POST {{api}}/reservations
+x-demo-user: {{ana}}
+Content-Type: application/json
+
+{
+  "resourceId": "{{labId}}",
+  "startDateTime": "{{dia}}T19:00:00Z",
+  "endDateTime": "{{dia}}T21:00:00Z",
+  "purpose": "TRAINING",
+  "justification": "Curso interno de IA generativa"
+}
+
+### 11. El Líder ve los pendientes
+GET {{api}}/approvals/pending
+x-demo-user: {{luis}}
+
+### 12. El Líder aprueba el entrenamiento
+POST {{api}}/approvals/{{entrenamiento.response.body.id}}
+x-demo-user: {{luis}}
+Content-Type: application/json
+
+{
+  "decision": "APPROVE",
+  "comments": "Adelante"
+}
+
+### 13. El SPOC de Edificio mueve la reserva de Ana a la Sala Cotopaxi
+POST {{api}}/reservations/{{reservaSala.response.body.id}}/reallocate
+x-demo-user: {{carlos}}
+Content-Type: application/json
+
+{
+  "newResourceId": "{{salaCotopaxiId}}",
+  "justification": "Visita de cliente en la Sala Pichincha"
+}
+
+### 14. Bandeja de avisos de Ana (debe tener los avisos de confirmación y reasignación)
+GET {{api}}/notifications
+x-demo-user: {{ana}}
+
+### 15. Mis reservas
+GET {{api}}/reservations/mine
+x-demo-user: {{ana}}
+
+### 16. Ana cancela su reserva de sala (se puede hasta 24 h antes)
+PATCH {{api}}/reservations/{{reservaSala.response.body.id}}/cancel
+x-demo-user: {{ana}}
+
+### 17. Panel del Líder: métricas
+GET {{api}}/dashboard/metrics
+x-demo-user: {{luis}}
+
+### 18. Reporte de ocupación del mes (Administrador)
+GET {{api}}/reports/occupancy?from=2026-11-01T05:00:00Z&to=2026-12-01T05:00:00Z
+x-demo-user: {{admin}}
+
+### 19. Auditoría (Administrador)
+GET {{api}}/audit
+x-demo-user: {{admin}}
