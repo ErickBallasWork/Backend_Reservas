@@ -1,44 +1,17 @@
-# Dependencies
+# Dependencias y compilados
 node_modules/
-.pnp
-.pnp.js
-
-# act local secrets - NEVER commit
-.secrets
-
-# Environment variables - NEVER commit these
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.env*.local
-
-# Build outputs
 dist/
-build/
-.next/
-out/
+coverage/
+*.tsbuildinfo
 
-# Vercel
-.vercel
+# Secretos: nunca al repositorio
+.env
+.env.*
+!.env.example
 
-# Prisma
-prisma/migrations/**/migration_lock.toml
-
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# OS
+# Sistema y editor
 .DS_Store
 Thumbs.db
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
+.vscode/*
+!.vscode/extensions.json
+*.log

@@ -1,0 +1,62 @@
+# Base de datos local para desarrollo y pruebas (SQL Server 2022 en Docker).
+# Es el mismo motor que Azure SQL, así que lo que funciona aquí funciona allá.
+#
+#   npm run db:up     enciende la base (la primera vez descarga la imagen, ~1.5 GB)
+#   npm run db:down   la apaga (los datos se conservan en el volumen)
+#
+# La contraseña del usuario "sa" se toma de DB_SA_PASSWORD en tu archivo .env.
+# Opcional: probar también la API dentro de Docker (igual que en Azure):
+#   docker compose --profile completo up -d --build
+
+name: reservas
+
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: reservas-sqlserver
+    # La imagen es para procesadores Intel/AMD. En Mac con chip M1/M2/M3 activa
+    # "Use Rosetta for x86_64/amd64 emulation" en Docker Desktop > Settings > General.
+    platform: linux/amd64
+    environment:
+      ACCEPT_EULA: 'Y'
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${DB_SA_PASSWORD:?Falta DB_SA_PASSWORD en el archivo .env}
+    ports:
+      - '1433:1433'
+    volumes:
+      # Los datos viven en este volumen: sobreviven a apagar o recrear el contenedor.
+      - sqldata:/var/opt/mssql
+    healthcheck:
+      # "Sano" cuando ya acepta consultas (tarda unos 20-40 s al arrancar)
+      test:
+        [
+          'CMD-SHELL',
+          '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -C -Q "SELECT 1" -b -o /dev/null || exit 1',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+  # La API en un contenedor, construida con el Dockerfile (como correrá en Azure Container Apps).
+  # Solo arranca con:  docker compose --profile completo up -d --build
+  # Antes aplica las migraciones desde tu PC (npm run db:migrate).
+  api:
+    profiles: ['completo']
+    build: .
+    container_name: reservas-api
+    env_file: .env
+    environment:
+      # Dentro de Docker la base se llama "db" (el nombre del servicio), no "localhost".
+      DATABASE_URL: sqlserver://db:1433;database=reservas_dev;user=sa;password=${DB_SA_PASSWORD};encrypt=true;trustServerCertificate=true
+      # La imagen trae NODE_ENV=production; aquí se usa development para permitir el modo demo.
+      NODE_ENV: development
+    ports:
+      - '3001:3001'
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  sqldata:
