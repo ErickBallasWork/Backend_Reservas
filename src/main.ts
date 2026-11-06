@@ -24,9 +24,9 @@ async function bootstrap() {
 
   app.enableShutdownHooks();
   await app.listen(server.port);
-  Logger.log(`API lista en http://localhost:${server.port}/api/v1`, 'Inicio');
-  Logger.log(`Swagger en http://localhost:${server.port}/api/docs`, 'Inicio');
-  Logger.log(`Autenticación: ${demoMode ? 'demo (solo desarrollo)' : 'Google'}`, 'Inicio');
+  Logger.log(`API ready at http://localhost:${server.port}/api/v1`, 'Bootstrap');
+  Logger.log(`Swagger at http://localhost:${server.port}/api/docs`, 'Bootstrap');
+  Logger.log(`Auth mode: ${demoMode ? 'demo (development only)' : 'google'}`, 'Bootstrap');
 }
 
 void bootstrap();

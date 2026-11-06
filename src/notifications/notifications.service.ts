@@ -24,12 +24,12 @@ export class NotificationsService {
   private readonly senders: Record<string, ChannelSender> = {
     EMAIL: {
       send: async ({ email, title }) => {
-        this.logger.log(`[simulado] e-mail a ${email}: ${title}`);
+        this.logger.log(`[simulated] e-mail to ${email}: ${title}`);
       },
     },
     PUSH: {
       send: async ({ email, title }) => {
-        this.logger.log(`[simulado] push a ${email}: ${title}`);
+        this.logger.log(`[simulated] push to ${email}: ${title}`);
       },
     },
   };
@@ -114,7 +114,7 @@ export class NotificationsService {
     for (const notification of pending) {
       const sender = this.senders[notification.channel];
       try {
-        if (!sender) throw new Error(`Canal ${notification.channel} no configurado`);
+        if (!sender) throw new Error(`Channel ${notification.channel} is not configured`);
         await sender.send({
           email: notification.user.email,
           title: notification.title,
@@ -127,7 +127,7 @@ export class NotificationsService {
         sent++;
       } catch (error) {
         const attempts = notification.attempts + 1;
-        this.logger.warn(`No se pudo enviar ${notification.id}: ${String(error)}`);
+        this.logger.warn(`Could not send ${notification.id}: ${String(error)}`);
         await this.prisma.notification.update({
           where: { id: notification.id },
           data: { attempts, status: attempts >= 3 ? 'FAILED' : 'PENDING' },

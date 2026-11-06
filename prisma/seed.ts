@@ -11,9 +11,7 @@ async function main() {
   }
 
   if (!initialAdmin) {
-    console.warn(
-      'Roles listos. Falta INITIAL_ADMIN_EMAIL en el .env: no se creó el Administrador.',
-    );
+    console.warn('Roles ready. INITIAL_ADMIN_EMAIL is not set, so no administrator was created.');
     return;
   }
   const { email, fullName } = initialAdmin;
@@ -24,13 +22,13 @@ async function main() {
     create: { email, fullName },
   });
   const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'ADMIN' } });
-  const yaEsAdmin = await prisma.userRole.findFirst({
+  const isAlreadyAdmin = await prisma.userRole.findFirst({
     where: { userId: admin.id, roleId: adminRole.id },
   });
-  if (!yaEsAdmin) {
+  if (!isAlreadyAdmin) {
     await prisma.userRole.create({ data: { userId: admin.id, roleId: adminRole.id } });
   }
-  console.log(`Roles listos. Administrador inicial: ${email}`);
+  console.log(`Roles ready. Initial administrator: ${email}`);
 }
 
 main()

@@ -3,7 +3,7 @@ import { ROLES } from '../src/common/constants';
 import { readSeedEnvironment } from './seed-environment';
 
 if (readSeedEnvironment().isProduction) {
-  throw new Error('El seed demo no se ejecuta en producción. Usa "npm run db:seed".');
+  throw new Error('The demo seed never runs in production. Use "npm run db:seed".');
 }
 
 const prisma = new PrismaClient();
@@ -137,7 +137,7 @@ async function main() {
   }
 
   console.log(
-    'Datos de ejemplo listos: 5 roles, 2 edificios, 4 salas, 1 laboratorio con 5 laptops y 5 usuarios demo.',
+    'Demo data ready: 5 roles, 2 buildings, 4 rooms, 1 lab with 5 laptops and 5 demo users.',
   );
 }
 
