@@ -5,7 +5,7 @@ COPY package*.json ./
 COPY prisma ./prisma
 RUN npm ci
 COPY . .
-RUN npm run build && npm prune --omit=dev
+RUN npm run build && npm run build:seed && npm prune --omit=dev
 
 FROM node:22-slim
 WORKDIR /app
@@ -15,6 +15,7 @@ ENV PORT=3001
 COPY --from=build /app/package*.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/dist-seed ./dist-seed
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/docker/start.sh ./start.sh
 USER node

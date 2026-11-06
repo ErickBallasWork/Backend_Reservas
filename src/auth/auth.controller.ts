@@ -7,7 +7,7 @@ import { ApiErrorResponses } from '../common/error-response.dto';
 import { limitFor } from '../throttling/rate-limits';
 import { AuthService } from './auth.service';
 import { DevicesService } from './devices.service';
-import { DemoLoginDto, RefreshDto } from './dto/auth.dto';
+import { DemoLoginDto, RefreshDto, SuperadminLoginDto } from './dto/auth.dto';
 import { DeviceSessionResponseDto, SessionResponseDto } from './dto/auth-response.dto';
 
 @ApiTags('Autenticación')
@@ -51,6 +51,19 @@ export class AuthController {
   @ApiOperation({ summary: 'Cerrar sesión: revoca el dispositivo dueño del refresh token' })
   logout(@Body() dto: RefreshDto) {
     return this.devices.logout(dto);
+  }
+
+  @Public()
+  @Throttle(limitFor('superadminLogin'))
+  @Post('superadmin-login')
+  @HttpCode(200)
+  @ApiOkResponse({ type: DeviceSessionResponseDto })
+  @ApiOperation({
+    summary:
+      'Solo pruebas (SUPERADMIN_TEST_LOGIN_ENABLED=true): entrar como el SUPERADMIN inicial con su correo como contraseña',
+  })
+  superadminLogin(@Body() dto: SuperadminLoginDto) {
+    return this.devices.loginSuperadminForTests(dto);
   }
 
   @Public()

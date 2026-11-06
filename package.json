@@ -27,7 +27,8 @@
     "access:approve": "ts-node prisma/approve-access.ts",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
-    "prepare": "husky"
+    "prepare": "husky",
+    "build:seed": "tsc -p tsconfig.seed.json"
   },
   "lint-staged": {
     "*.{ts,mjs,js}": [

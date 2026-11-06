@@ -3,7 +3,9 @@ set -e
 
 max_attempts=4
 attempt=1
-until ./node_modules/.bin/prisma migrate deploy; do
+
+# Es más seguro usar npx que la ruta absoluta al binario dentro de Docker
+until npx prisma migrate deploy; do
   if [ "$attempt" -ge "$max_attempts" ]; then
     echo "Migrations failed after $max_attempts attempts."
     exit 1
@@ -13,4 +15,8 @@ until ./node_modules/.bin/prisma migrate deploy; do
   sleep 15
 done
 
+echo "Migrations completed successfully. Seeding roles and initial SUPERADMIN..."
+node dist-seed/prisma/seed.js
+
+echo "Seed completed. Starting NestJS application..."
 exec node dist/main.js
