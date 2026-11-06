@@ -1,5 +1,5 @@
-import { Prisma } from '@prisma/client';
-import { CurrentUserData } from '../common/current-user/current-user.types';
+import { type Prisma } from '@prisma/client';
+import { type CurrentUserData } from '../common/current-user/current-user.types';
 
 export const USER_WITH_ROLES = {
   roles: { include: { role: true } },

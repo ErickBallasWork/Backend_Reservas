@@ -53,7 +53,7 @@ export class AuditService {
       items: items.map((item) => ({
         ...item,
         id: item.id.toString(),
-        details: item.details ? JSON.parse(item.details) : null,
+        details: item.details ? (JSON.parse(item.details) as unknown) : null,
       })),
     };
   }

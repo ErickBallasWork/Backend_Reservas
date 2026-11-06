@@ -22,22 +22,23 @@ export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
   private readonly senders: Record<string, ChannelSender> = {
-    EMAIL: {
-      send: async ({ email, title }) => {
-        this.logger.log(`[simulated] e-mail to ${email}: ${title}`);
-      },
-    },
-    PUSH: {
-      send: async ({ email, title }) => {
-        this.logger.log(`[simulated] push to ${email}: ${title}`);
-      },
-    },
+    EMAIL: this.simulatedSender('e-mail'),
+    PUSH: this.simulatedSender('push'),
   };
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly appConfig: AppConfigService,
   ) {}
+
+  private simulatedSender(channel: string): ChannelSender {
+    return {
+      send: ({ email, title }) => {
+        this.logger.log(`[simulated] ${channel} to ${email}: ${title}`);
+        return Promise.resolve();
+      },
+    };
+  }
 
   async notify(input: NotifyInput, db?: Db): Promise<void> {
     const client = db ?? this.prisma;
