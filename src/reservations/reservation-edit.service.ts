@@ -141,7 +141,11 @@ export class ReservationEditService {
           tx,
         );
         if (goesToApproval) {
-          await this.leaderNotifier.requestApproval(tx, user.fullName, label);
+          await this.leaderNotifier.requestApproval(tx, {
+            requesterId: user.id,
+            requesterName: user.fullName,
+            label,
+          });
         }
         await this.audit.log(
           {

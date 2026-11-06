@@ -12,7 +12,6 @@ const user = (roles: string[], overrides: Partial<CurrentUserData> = {}): Curren
 
 const target = (overrides: Partial<ReservationAccessTarget> = {}): ReservationAccessTarget => ({
   userId: 'owner',
-  status: 'CONFIRMED',
   resourceBuildingId: 'building-a',
   ownerIsManagedBy: false,
   ...overrides,
@@ -42,9 +41,8 @@ describe('canViewReservation', () => {
     expect(canViewReservation(user(['SPOC_ADMIN']), target())).toBe(false);
   });
 
-  it('lets a leader see managed associates and any reservation awaiting approval', () => {
+  it('lets a leader see managed associates only, even when the request is pending', () => {
     expect(canViewReservation(user(['LIDER']), target({ ownerIsManagedBy: true }))).toBe(true);
-    expect(canViewReservation(user(['LIDER']), target({ status: 'PENDING_APPROVAL' }))).toBe(true);
     expect(canViewReservation(user(['LIDER']), target())).toBe(false);
   });
 });

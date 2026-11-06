@@ -181,10 +181,12 @@ export class ReservationResponseDto {
   checkIn!: CheckInResponseDto | null;
 }
 
-export class ReservationDetailResponseDto extends ReservationResponseDto {
+export class ReservationWithApprovalsDto extends ReservationResponseDto {
   @ApiProperty({ type: [ReservationApprovalDto] })
   approvals!: ReservationApprovalDto[];
+}
 
+export class ReservationDetailResponseDto extends ReservationWithApprovalsDto {
   @ApiProperty({ type: [ReservationReallocationDto] })
   reallocations!: ReservationReallocationDto[];
 }
@@ -199,6 +201,6 @@ export class ReservationPageResponseDto {
   @ApiProperty()
   pageSize!: number;
 
-  @ApiProperty({ type: [ReservationResponseDto] })
-  items!: ReservationResponseDto[];
+  @ApiProperty({ type: [ReservationWithApprovalsDto] })
+  items!: ReservationWithApprovalsDto[];
 }

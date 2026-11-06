@@ -1,9 +1,8 @@
-import { PRIVILEGED_ROLES, Status } from '../common/constants';
+import { PRIVILEGED_ROLES } from '../common/constants';
 import { type CurrentUserData } from '../common/current-user/current-user.types';
 
 export interface ReservationAccessTarget {
   userId: string;
-  status: string;
   resourceBuildingId: string;
   ownerIsManagedBy: boolean;
 }
@@ -20,9 +19,6 @@ export function canViewReservation(
   ) {
     return true;
   }
-  if (user.roles.includes('SPOC_ADMIN') && target.ownerIsManagedBy) return true;
-  if (user.roles.includes('LIDER')) {
-    return target.ownerIsManagedBy || target.status === Status.PENDING_APPROVAL;
-  }
-  return false;
+  const isManager = user.roles.includes('SPOC_ADMIN') || user.roles.includes('LIDER');
+  return isManager && target.ownerIsManagedBy;
 }

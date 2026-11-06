@@ -52,6 +52,11 @@ export const RESERVATION_INCLUDE = {
   series: { select: { id: true, occurrenceCount: true } },
 } satisfies Prisma.ReservationInclude;
 
+export const APPROVALS_INCLUDE = {
+  orderBy: { decisionDate: 'desc' },
+  include: { approver: { select: { fullName: true } } },
+} satisfies Prisma.Reservation$approvalsArgs;
+
 @Injectable()
 export class ReservationsService {
   constructor(
@@ -143,7 +148,11 @@ export class ReservationsService {
           );
 
           if (status === Status.PENDING_APPROVAL) {
-            await this.leaderNotifier.requestApproval(tx, user.fullName, label);
+            await this.leaderNotifier.requestApproval(tx, {
+              requesterId: user.id,
+              requesterName: user.fullName,
+              label,
+            });
           }
 
           await this.audit.log(
@@ -177,10 +186,7 @@ export class ReservationsService {
       where: { id },
       include: {
         ...RESERVATION_INCLUDE,
-        approvals: {
-          orderBy: { decisionDate: 'desc' },
-          include: { approver: { select: { fullName: true } } },
-        },
+        approvals: APPROVALS_INCLUDE,
         reallocations: { orderBy: { reallocationDate: 'desc' } },
       },
     });
@@ -198,7 +204,6 @@ export class ReservationsService {
     const ownerIsManagedBy = await this.isManagedBy(user, reservation.userId);
     const allowed = canViewReservation(user, {
       userId: reservation.userId,
-      status: reservation.status,
       resourceBuildingId: reservation.resource.building.id,
       ownerIsManagedBy,
     });
@@ -236,7 +241,7 @@ export class ReservationsService {
     const [items, total] = await Promise.all([
       this.prisma.reservation.findMany({
         where,
-        include: RESERVATION_INCLUDE,
+        include: { ...RESERVATION_INCLUDE, approvals: APPROVALS_INCLUDE },
         orderBy: { startDateTime: 'desc' },
         ...toSkipTake(query),
       }),

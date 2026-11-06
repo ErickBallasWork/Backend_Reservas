@@ -5,6 +5,8 @@ import { Test } from '@nestjs/testing';
 import { DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
 import { AccessRequestsController } from '../access-requests/access-requests.controller';
 import { AccessRequestsService } from '../access-requests/access-requests.service';
+import { ApprovalsController } from '../approvals/approvals.controller';
+import { ApprovalsService } from '../approvals/approvals.service';
 import { AvailabilityController } from '../availability/availability.controller';
 import { AvailabilityService } from '../availability/availability.service';
 import { AuthController } from '../auth/auth.controller';
@@ -78,6 +80,9 @@ const DOCUMENTED_OPERATIONS: [string, string][] = [
   ['patch', '/reservations/{id}'],
   ['patch', '/reservations/{id}/cancel'],
   ['post', '/reservations/{id}/check-in'],
+  ['get', '/approvals/pending'],
+  ['post', '/approvals/{reservationId}'],
+  ['post', '/approvals/series/{seriesId}'],
 ];
 
 function sourceFiles(dir: string): string[] {
@@ -107,6 +112,7 @@ describe('OpenAPI contract', () => {
         ReservationsController,
         OperatingHoursController,
         ReservationSeriesController,
+        ApprovalsController,
       ],
       providers: [
         { provide: AuthService, useValue: {} },
@@ -123,6 +129,7 @@ describe('OpenAPI contract', () => {
         { provide: ReservationEditService, useValue: {} },
         { provide: ReservationSeriesService, useValue: {} },
         { provide: OperatingHoursService, useValue: {} },
+        { provide: ApprovalsService, useValue: {} },
         { provide: PrismaService, useValue: {} },
       ],
     }).compile();

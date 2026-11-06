@@ -12,6 +12,9 @@ export const SUPERADMIN_ROLE: Role = 'SUPERADMIN';
 export const MANAGER_ROLES: readonly string[] = ['SPOC_ADMIN', 'LIDER'];
 export const PRIVILEGED_ROLES: readonly string[] = ['ADMIN', SUPERADMIN_ROLE];
 
+export const APPROVAL_DECISIONS = ['APPROVE', 'REJECT'] as const;
+export type ApprovalDecision = (typeof APPROVAL_DECISIONS)[number];
+
 export const RESOURCE_TYPES = ['MEETING_ROOM', 'AI_LAB', 'LAPTOP'] as const;
 export type ResourceType = (typeof RESOURCE_TYPES)[number];
 

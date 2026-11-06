@@ -355,7 +355,14 @@ export class ReservationSeriesService {
         },
         tx,
       );
-      if (pending) await this.leaderNotifier.requestApproval(tx, user.fullName, label);
+      if (pending) {
+        await this.leaderNotifier.requestApproval(tx, {
+          requesterId: user.id,
+          requesterName: user.fullName,
+          label,
+          count: createdCount,
+        });
+      }
       await this.audit.log(
         {
           userId: user.id,
