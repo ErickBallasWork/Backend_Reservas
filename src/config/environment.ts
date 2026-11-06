@@ -11,6 +11,7 @@ import {
   IsOptional,
   IsString,
   IsTimeZone,
+  Matches,
   IsUrl,
   Max,
   Min,
@@ -110,6 +111,20 @@ export class EnvironmentVariables {
   @Transform(toBoolean)
   @IsBoolean()
   SCHEDULER_ENABLED = true;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  VAPID_PUBLIC_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  VAPID_PRIVATE_KEY?: string;
+
+  @IsOptional()
+  @Matches(/^(mailto:.+|https:\/\/.+)$/)
+  VAPID_SUBJECT?: string;
 }
 
 function withoutEmptyValues(raw: Record<string, unknown>): Record<string, unknown> {
@@ -129,6 +144,10 @@ function crossFieldErrors(env: EnvironmentVariables): string[] {
   }
   if (env.NODE_ENV === 'production' && !env.JOB_KEY) {
     errors.push('JOB_KEY: is required in production');
+  }
+  const vapid = [env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY, env.VAPID_SUBJECT];
+  if (vapid.some(Boolean) && !vapid.every(Boolean)) {
+    errors.push('VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT: set all three or none');
   }
   return errors;
 }

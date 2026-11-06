@@ -59,6 +59,12 @@ export class UnreadCountResponseDto {
 export class RunNotificationJobsResponseDto {
   @ApiProperty({ description: 'Reminders created in this run' })
   reminded!: number;
+
+  @ApiProperty({ description: 'Push notices delivered in this run' })
+  pushSent!: number;
+
+  @ApiProperty({ description: 'Push notices that ran out of attempts in this run' })
+  pushFailed!: number;
 }
 
 export class MarkAllReadResponseDto {

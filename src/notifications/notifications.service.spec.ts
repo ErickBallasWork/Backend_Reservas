@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { type Prisma } from '@prisma/client';
 import { type PrismaService } from '../prisma/prisma.service';
+import { type AppConfigService } from '../config/app-config.service';
 import { NotificationsQueryDto } from './dto/notifications-query.dto';
 import { NotificationsService } from './notifications.service';
 
@@ -13,9 +14,11 @@ const STORED = {
   createdAt: new Date('2026-11-11T15:00:00Z'),
 };
 
-function build() {
+function build(pushEnabled = false) {
   const notification = {
-    create: jest.fn<Promise<unknown>, [Prisma.NotificationCreateArgs]>().mockResolvedValue({}),
+    createMany: jest
+      .fn<Promise<unknown>, [Prisma.NotificationCreateManyArgs]>()
+      .mockResolvedValue({}),
     findMany: jest
       .fn<Promise<unknown[]>, [Prisma.NotificationFindManyArgs]>()
       .mockResolvedValue([STORED]),
@@ -30,7 +33,10 @@ function build() {
       .fn<Promise<{ count: number }>, [Prisma.NotificationUpdateManyArgs]>()
       .mockResolvedValue({ count: 3 }),
   };
-  const service = new NotificationsService({ notification } as unknown as PrismaService);
+  const service = new NotificationsService(
+    { notification } as unknown as PrismaService,
+    { push: pushEnabled ? { publicKey: 'k' } : null } as unknown as AppConfigService,
+  );
   return { service, notification };
 }
 
@@ -49,8 +55,27 @@ describe('NotificationsService', () => {
       message: 'Tu reserva quedó confirmada.',
     });
 
-    const { data } = notification.create.mock.calls[0][0];
-    expect(data).toMatchObject({ userId: 'u-1', channel: 'IN_APP', status: 'SENT' });
+    const { data } = notification.createMany.mock.calls[0][0];
+    expect(data).toEqual([
+      expect.objectContaining({ userId: 'u-1', channel: 'IN_APP', status: 'SENT' }),
+    ]);
+  });
+
+  it('also queues a push delivery when web push is configured', async () => {
+    const { service, notification } = build(true);
+
+    await service.notify({
+      userId: 'u-1',
+      type: 'RESERVATION_CONFIRMED',
+      title: 'Reserva confirmada',
+      message: 'Sala A',
+    });
+
+    const { data } = notification.createMany.mock.calls[0][0];
+    expect(data).toEqual([
+      expect.objectContaining({ channel: 'IN_APP', status: 'SENT' }),
+      expect.objectContaining({ channel: 'PUSH', status: 'PENDING', userId: 'u-1' }),
+    ]);
   });
 
   it('lists only my in-app notices and hides the delivery internals', async () => {
@@ -133,11 +158,9 @@ describe('NotificationsService', () => {
       expiresAt: eventAt,
     });
 
-    expect(notification.create.mock.calls[0][0].data).toMatchObject({
-      reservationId: 'res-1',
-      eventAt,
-      expiresAt: eventAt,
-    });
+    expect(notification.createMany.mock.calls[0][0].data).toEqual([
+      expect.objectContaining({ reservationId: 'res-1', eventAt, expiresAt: eventAt }),
+    ]);
   });
 
   it('resolves only the unread notices of the given types for a reservation', async () => {

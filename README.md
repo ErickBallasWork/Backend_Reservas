@@ -50,6 +50,9 @@ mensaje lista cada problema.
 | `ALLOWED_EMAIL_DOMAINS`    | sí            | —                    | no      | Dominios permitidos separados por coma, por ejemplo `tcs.com,pichincha.com`                                                         |
 | `DEMO_LOGIN_ENABLED`       | no            | `false`              | no      | `true` habilita `POST /auth/demo` (solo desarrollo). La API no arranca así en producción                                            |
 | `JOB_KEY`                  | en producción | —                    | **sí**  | Mínimo 32. Las tareas programadas exigen la cabecera `x-job-key`. Debe ser igual al secret `JOB_KEY` del workflow `no-show-job.yml` |
+| `VAPID_PUBLIC_KEY`         | no            | —                    | no      | Clave pública Web Push. Se generan con `npx web-push generate-vapid-keys`. Las tres `VAPID_*` van juntas o ninguna                  |
+| `VAPID_PRIVATE_KEY`        | no            | —                    | sí      | Clave privada Web Push                                                                                                              |
+| `VAPID_SUBJECT`            | no            | —                    | no      | `mailto:` o URL `https://` de contacto para el servicio de push                                                                     |
 | `SCHEDULER_ENABLED`        | no            | `true`               | no      | Ejecuta en la API los recordatorios y la purga de avisos. Requiere Always On en App Service                                         |
 | `NO_SHOW_ENFORCED_FROM`    | no            | —                    | no      | Fecha ISO 8601. El job de inasistencia ignora las reservas que empezaron antes                                                      |
 | `INITIAL_SUPERADMIN_EMAIL` | solo seed     | —                    | no      | SUPERADMIN que crea `npm run db:seed`                                                                                               |

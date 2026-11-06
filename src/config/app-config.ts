@@ -24,10 +24,17 @@ export interface JobsConfig {
   schedulerEnabled: boolean;
 }
 
+export interface PushConfig {
+  publicKey: string;
+  privateKey: string;
+  subject: string;
+}
+
 export interface AppConfig {
   server: ServerConfig;
   auth: AuthConfig;
   jobs: JobsConfig;
+  push: PushConfig | null;
 }
 
 const SECONDS_PER_MINUTE = 60;
@@ -51,6 +58,14 @@ export function toAppConfig(env: EnvironmentVariables): AppConfig {
       allowedEmailDomains: env.ALLOWED_EMAIL_DOMAINS,
       demoLoginEnabled: env.DEMO_LOGIN_ENABLED,
     },
+    push:
+      env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY && env.VAPID_SUBJECT
+        ? {
+            publicKey: env.VAPID_PUBLIC_KEY,
+            privateKey: env.VAPID_PRIVATE_KEY,
+            subject: env.VAPID_SUBJECT,
+          }
+        : null,
     jobs: {
       jobKey: env.JOB_KEY ?? null,
       noShowEnforcedFrom: env.NO_SHOW_ENFORCED_FROM ? new Date(env.NO_SHOW_ENFORCED_FROM) : null,

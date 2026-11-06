@@ -119,6 +119,7 @@ model User {
   sanctions          Sanction[]          @relation("SanctionUser")
   sanctionsResolved  Sanction[]          @relation("SanctionResolver")
   notifications      Notification[]
+  pushSubscriptions  PushSubscription[]
   auditLogs          AuditLog[]
   checkIns           CheckIn[]
   accessDecisions    AccessRequest[]     @relation("AccessRequestDecider")
@@ -406,6 +407,24 @@ model Notification {
   @@index([reservationId])
   @@index([accessRequestId])
   @@map("NOTIFICATION")
+}
+
+// Navegador o celular que aceptó recibir avisos con la app cerrada (Web Push).
+model PushSubscription {
+  id           String   @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  userId       String   @map("UserId") @db.UniqueIdentifier
+  endpoint     String   @map("Endpoint") @db.NVarChar(2000)
+  // SHA-256 del endpoint: SQL Server no indexa una columna tan larga
+  endpointHash String   @unique @map("EndpointHash") @db.Char(64)
+  p256dh       String   @map("P256dh") @db.NVarChar(200)
+  auth         String   @map("Auth") @db.NVarChar(100)
+  userAgent    String?  @map("UserAgent") @db.NVarChar(300)
+  createdAt    DateTime @default(now()) @map("CreatedAt")
+
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([userId])
+  @@map("PUSH_SUBSCRIPTION")
 }
 
 // Solo inserción: el usuario de la aplicación no debe poder editar ni borrar (docs/sql).

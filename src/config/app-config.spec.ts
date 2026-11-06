@@ -41,6 +41,38 @@ describe('loadAppConfig', () => {
     expect(config.jobs.schedulerEnabled).toBe(true);
   });
 
+  it('leaves web push off without VAPID keys', () => {
+    expect(loadAppConfig(baseEnv()).push).toBeNull();
+  });
+
+  it('turns web push on when the three VAPID values are set', () => {
+    const config = loadAppConfig(
+      baseEnv({
+        VAPID_PUBLIC_KEY: 'public',
+        VAPID_PRIVATE_KEY: 'private',
+        VAPID_SUBJECT: 'mailto:soporte@tcs.com',
+      }),
+    );
+
+    expect(config.push).toEqual({
+      publicKey: 'public',
+      privateKey: 'private',
+      subject: 'mailto:soporte@tcs.com',
+    });
+  });
+
+  it('rejects a partial VAPID configuration', () => {
+    expect(() => loadAppConfig(baseEnv({ VAPID_PUBLIC_KEY: 'public' }))).toThrow('VAPID');
+  });
+
+  it('rejects a VAPID subject that is neither mailto nor https', () => {
+    expect(() =>
+      loadAppConfig(
+        baseEnv({ VAPID_PUBLIC_KEY: 'a', VAPID_PRIVATE_KEY: 'b', VAPID_SUBJECT: 'soporte' }),
+      ),
+    ).toThrow('VAPID_SUBJECT');
+  });
+
   it('lets an instance opt out of the in-process scheduler', () => {
     expect(loadAppConfig(baseEnv({ SCHEDULER_ENABLED: 'false' })).jobs.schedulerEnabled).toBe(
       false,

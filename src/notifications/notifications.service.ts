@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import type { NotificationType } from '../common/constants';
 import { Db } from '../common/db.types';
 import { toSkipTake } from '../common/pagination.dto';
+import { AppConfigService } from '../config/app-config.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsQueryDto } from './dto/notifications-query.dto';
 
@@ -39,12 +40,17 @@ function visibleTo(userId: string, now: Date): Prisma.NotificationWhereInput {
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly appConfig: AppConfigService,
+  ) {}
 
   async notify(input: NotifyInput, db?: Db): Promise<void> {
     const client = db ?? this.prisma;
-    await client.notification.create({
-      data: { ...input, channel: 'IN_APP', status: 'SENT', sentAt: new Date() },
+    const inApp = { ...input, channel: 'IN_APP', status: 'SENT', sentAt: new Date() };
+    const push = { ...input, channel: 'PUSH', status: 'PENDING' };
+    await client.notification.createMany({
+      data: this.appConfig.push ? [inApp, push] : [inApp],
     });
   }
 

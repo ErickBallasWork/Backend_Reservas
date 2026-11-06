@@ -30,6 +30,8 @@ import { ReservationsController } from '../reservations/reservations.controller'
 import { ReservationsService } from '../reservations/reservations.service';
 import { NotificationsController } from '../notifications/notifications.controller';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PushDispatcherService } from '../notifications/push/push-dispatcher.service';
+import { PushSubscriptionsService } from '../notifications/push/push-subscriptions.service';
 import { RemindersService } from '../notifications/reminders/reminders.service';
 import { OperatingHoursController } from '../operating-hours/operating-hours.controller';
 import { OperatingHoursService } from '../operating-hours/operating-hours.service';
@@ -101,6 +103,9 @@ const DOCUMENTED_OPERATIONS: [string, string][] = [
   ['patch', '/notifications/read-all'],
   ['patch', '/notifications/{id}/read'],
   ['post', '/notifications/jobs/run'],
+  ['get', '/notifications/push-config'],
+  ['put', '/notifications/push-subscription'],
+  ['delete', '/notifications/push-subscription'],
 ];
 
 function sourceFiles(dir: string): string[] {
@@ -156,6 +161,8 @@ describe('OpenAPI contract', () => {
         { provide: SanctionsService, useValue: {} },
         { provide: NotificationsService, useValue: {} },
         { provide: RemindersService, useValue: {} },
+        { provide: PushSubscriptionsService, useValue: {} },
+        { provide: PushDispatcherService, useValue: {} },
         { provide: PrismaService, useValue: {} },
       ],
     }).compile();
