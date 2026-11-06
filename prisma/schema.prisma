@@ -198,6 +198,7 @@ model Reservation {
   purpose         String   @map("Purpose") @db.NVarChar(30)
   // Detalle o justificación del motivo (RF-07)
   justification   String   @map("Justification") @db.NVarChar(1000)
+  attendees       Int?     @map("Attendees")
   startDateTime   DateTime @map("StartDateTime")
   endDateTime     DateTime @map("EndDateTime")
   // PENDING_APPROVAL | CONFIRMED | REJECTED | CANCELLED | CHECKED_IN | NO_SHOW

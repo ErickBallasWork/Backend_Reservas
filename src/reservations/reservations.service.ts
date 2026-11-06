@@ -23,6 +23,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SanctionsService } from '../sanctions/sanctions.service';
 import { CheckInDto, CreateReservationDto, MyReservationsQueryDto } from './dto/reservation.dto';
 import { canViewReservation } from './reservation-access.policy';
+import { resolveAttendees } from './attendees-rule';
 import { insertSlots } from './slots';
 import {
   buildSlotStarts,
@@ -79,6 +80,12 @@ export class ReservationsService {
     }
 
     const resource = await this.lookup.getActiveResource(dto.resourceId);
+    let attendees: number | null = null;
+    try {
+      attendees = resolveAttendees(resource.type as ResourceType, dto.attendees, resource.capacity);
+    } catch (error) {
+      ReservationsService.toHttpError(error);
+    }
     const reservationType = RESERVATION_TYPE_BY_RESOURCE[resource.type as ResourceType];
     const blockedIds =
       resource.type === 'AI_LAB'
@@ -103,6 +110,7 @@ export class ReservationsService {
               reservationType,
               purpose: dto.purpose,
               justification: dto.justification,
+              attendees,
               startDateTime: start,
               endDateTime: end,
               status,

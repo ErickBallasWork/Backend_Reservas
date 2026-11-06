@@ -139,6 +139,9 @@ export class ReservationResponseDto {
   @ApiProperty()
   justification!: string;
 
+  @ApiProperty({ type: Number, nullable: true })
+  attendees!: number | null;
+
   @ApiProperty({ format: 'date-time' })
   startDateTime!: Date;
 

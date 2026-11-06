@@ -3,11 +3,14 @@ import { Transform } from 'class-transformer';
 import {
   IsDateString,
   IsIn,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
+  Min,
 } from 'class-validator';
 import { CHECK_IN_METHODS, PURPOSES, RESERVATION_STATUSES } from '../../common/constants';
 import { PaginationQueryDto } from '../../common/pagination.dto';
@@ -41,6 +44,17 @@ export class CreateReservationDto {
   @IsNotEmpty()
   @MaxLength(1000)
   justification!: string;
+
+  @ApiPropertyOptional({
+    description:
+      'People who will attend. Required for rooms and AI labs, up to the capacity of the resource. Ignored for laptops',
+    example: 6,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10_000)
+  attendees?: number;
 }
 
 export class CheckInDto {
