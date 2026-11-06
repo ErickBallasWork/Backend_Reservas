@@ -2,10 +2,12 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
+  OnModuleInit,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, type User } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import {
   type AccessRequestKind,
@@ -20,7 +22,7 @@ import { AppConfigService } from '../config/app-config.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RoleRowsService } from '../users/role-rows.service';
-import { cooldownEndsAt, isAllowedDomain } from './access-request.rules';
+import { cooldownEndsAt, isAllowedDomain, isBootstrapWindowOpen } from './access-request.rules';
 import {
   AccessRequestStatusQueryDto,
   ApproveAccessRequestDto,
@@ -34,7 +36,9 @@ const WITH_DECIDER = { decidedBy: { select: { fullName: true } } } as const;
 type RequestWithDecider = Prisma.AccessRequestGetPayload<{ include: typeof WITH_DECIDER }>;
 
 @Injectable()
-export class AccessRequestsService {
+export class AccessRequestsService implements OnModuleInit {
+  private readonly logger = new Logger(AccessRequestsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
@@ -42,6 +46,16 @@ export class AccessRequestsService {
     private readonly appConfig: AppConfigService,
     private readonly roleRows: RoleRowsService,
   ) {}
+
+  onModuleInit(): void {
+    const bootstrap = this.appConfig.auth.bootstrapSuperadmin;
+    if (bootstrap?.autoApprove) {
+      this.logger.warn(
+        `INITIAL_SUPERADMIN_AUTO_APPROVE is on: the first device of ${bootstrap.email} is approved ` +
+          'without review. Turn it off after the first login.',
+      );
+    }
+  }
 
   async create(dto: CreateAccessRequestDto) {
     const email = dto.email.trim().toLowerCase();
@@ -56,31 +70,54 @@ export class AccessRequestsService {
     const existingUser = await this.prisma.user.findUnique({ where: { email } });
     const kind: AccessRequestKind = existingUser ? 'NEW_DEVICE' : 'NEW_USER';
 
+    const bootstrap = this.appConfig.auth.bootstrapSuperadmin;
+    const bootstrapCandidate =
+      existingUser && bootstrap?.autoApprove && bootstrap.email === email ? existingUser : null;
+
     try {
-      const request = await this.prisma.$transaction(async (tx) => {
-        const created = await tx.accessRequest.create({
-          data: {
-            email,
-            fullName: existingUser?.fullName ?? dto.fullName.trim(),
-            department: dto.department?.trim() || existingUser?.department,
-            kind,
-            deviceSecretHash: hashSecret(dto.deviceSecret),
-            deviceLabel: dto.deviceLabel?.trim(),
-          },
-        });
-        await this.audit.log(
-          {
-            userId: existingUser?.id ?? null,
-            action: 'ACCESS_REQUESTED',
-            entity: 'AccessRequest',
-            entityId: created.id,
-            details: { email, kind },
-          },
-          tx,
-        );
-        await this.notifySuperadmins(created.id, created.fullName, email, tx);
-        return created;
-      });
+      const request = await this.prisma.$transaction(
+        async (tx) => {
+          const autoApprove =
+            bootstrapCandidate !== null && (await this.canAutoApprove(tx, bootstrapCandidate));
+          const created = await tx.accessRequest.create({
+            data: {
+              email,
+              fullName: existingUser?.fullName ?? dto.fullName.trim(),
+              department: dto.department?.trim() || existingUser?.department,
+              kind,
+              deviceSecretHash: hashSecret(dto.deviceSecret),
+              deviceLabel: dto.deviceLabel?.trim(),
+              ...(autoApprove ? { status: 'APPROVED', decidedAt: new Date() } : {}),
+            },
+          });
+          await this.audit.log(
+            {
+              userId: existingUser?.id ?? null,
+              action: 'ACCESS_REQUESTED',
+              entity: 'AccessRequest',
+              entityId: created.id,
+              details: { email, kind },
+            },
+            tx,
+          );
+          if (autoApprove) {
+            await this.audit.log(
+              {
+                userId: null,
+                action: 'ACCESS_REQUEST_APPROVED',
+                entity: 'AccessRequest',
+                entityId: created.id,
+                details: { email, kind, source: 'bootstrap-auto-approve' },
+              },
+              tx,
+            );
+          } else {
+            await this.notifySuperadmins(created.id, created.fullName, email, tx);
+          }
+          return created;
+        },
+        bootstrapCandidate ? { isolationLevel: Prisma.TransactionIsolationLevel.Serializable } : {},
+      );
       return { requestId: request.id };
     } catch (error) {
       if (isUniqueViolation(error)) throw this.pendingConflict();
@@ -184,6 +221,16 @@ export class AccessRequestsService {
       return tx.accessRequest.findUniqueOrThrow({ where: { id }, include: WITH_DECIDER });
     });
     return this.toResponse(decided);
+  }
+
+  private async canAutoApprove(tx: Prisma.TransactionClient, user: User): Promise<boolean> {
+    if (!user.isActive || !isBootstrapWindowOpen(user.createdAt)) return false;
+    const [superadminRoles, devices, approvals] = await Promise.all([
+      tx.userRole.count({ where: { userId: user.id, role: { name: SUPERADMIN_ROLE } } }),
+      tx.device.count({ where: { userId: user.id } }),
+      tx.accessRequest.count({ where: { email: user.email, status: 'APPROVED' } }),
+    ]);
+    return superadminRoles > 0 && devices === 0 && approvals === 0;
   }
 
   private async assertCanRequest(email: string): Promise<void> {

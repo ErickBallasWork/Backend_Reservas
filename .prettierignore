@@ -1,4 +1,5 @@
 dist
+dist-seed
 coverage
 node_modules
 package-lock.json
