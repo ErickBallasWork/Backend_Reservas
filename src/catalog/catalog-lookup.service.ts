@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { BLOCKING_STATUSES, ResourceType } from '../common/constants';
+import { Db } from '../common/db.types';
 import { PrismaService } from '../prisma/prisma.service';
 
 const TYPE_LABEL: Record<string, string> = {
@@ -47,9 +48,9 @@ export class CatalogLookupService {
     return resource;
   }
 
-  /** Ids de las laptops activas de un laboratorio. */
-  async activeLaptopIds(labId: string): Promise<string[]> {
-    const laptops = await this.prisma.resource.findMany({
+  /** Ids de las laptops activas de un laboratorio. Pasa "db" para leer dentro de una transacción. */
+  async activeLaptopIds(labId: string, db: Db = this.prisma): Promise<string[]> {
+    const laptops = await db.resource.findMany({
       where: { parentResourceId: labId, type: 'LAPTOP', isActive: true },
       select: { id: true },
     });

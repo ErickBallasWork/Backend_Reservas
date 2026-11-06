@@ -26,6 +26,36 @@ import {
   validateReservationTimes,
 } from './time-rules';
 
+/** Recurso ya validado con getActiveResource (trae su edificio y, si es laptop, su laboratorio). */
+export type ActiveResource = Awaited<ReturnType<CatalogLookupService['getActiveResource']>>;
+
+export interface NewReservationInput {
+  resource: ActiveResource;
+  start: Date;
+  end: Date;
+  purpose: string;
+  justification: string;
+}
+
+export interface NewReservationOptions {
+  /** false = no avisar al dueño de la reserva nueva (quien llama manda su propio aviso). */
+  notifyOwner?: boolean;
+  /** Datos extra para la auditoría, por ejemplo la solicitud de cesión de origen. */
+  auditDetails?: Record<string, unknown>;
+}
+
+/** Nombre legible del recurso para los avisos: "Sala Board", "Laboratorio IA 1 (completo)"... */
+export function reservationLabel(resource: {
+  type: string;
+  name: string;
+  parent?: { name: string } | null;
+}): string {
+  if (resource.type === 'LAPTOP') return `la laptop ${resource.name} (${resource.parent?.name ?? 'laboratorio'})`;
+  if (resource.type === 'AI_LAB') return `${resource.name} (completo)`;
+  return resource.name;
+}
+
+
 // Datos que se devuelven junto con cada reserva.
 export const RESERVATION_INCLUDE = {
   resource: {
@@ -76,73 +106,20 @@ export class ReservationsService {
       ReservationsService.toHttpError(error);
     }
 
-    // 3) Qué recurso se reserva y qué recursos quedan bloqueados (RF-03).
+    // 3) Qué recurso se reserva (RF-03).
     const resource = await this.lookup.getActiveResource(dto.resourceId);
-    const reservationType = RESERVATION_TYPE_BY_RESOURCE[resource.type as ResourceType];
-    // El laboratorio completo bloquea también cada una de sus laptops; y una laptop tomada
-    // impide reservar el laboratorio completo en ese horario (choca en la franja de la laptop).
-    const blockedIds =
-      resource.type === 'AI_LAB'
-        ? [resource.id, ...(await this.lookup.activeLaptopIds(resource.id))]
-        : [resource.id];
-    const slotStarts = buildSlotStarts(start, end, rules.slotMinutes);
-    const status = dto.purpose === 'TRAINING' ? Status.PENDING_APPROVAL : Status.CONFIRMED;
-    const label =
-      resource.type === 'LAPTOP'
-        ? `la laptop ${resource.name} (${resource.parent?.name ?? 'laboratorio'})`
-        : resource.type === 'AI_LAB'
-          ? `${resource.name} (completo)`
-          : resource.name;
 
     // 4) Todo en una transacción: reserva + franjas + avisos + auditoría.
     try {
       const reservation = await this.prisma.$transaction(
-        async (tx) => {
-          const created = await tx.reservation.create({
-            data: {
-              userId: user.id,
-              resourceId: resource.id,
-              reservationType,
-              purpose: dto.purpose,
-              justification: dto.justification.trim(),
-              startDateTime: start,
-              endDateTime: end,
-              status,
-            },
-          });
-
-          await insertSlots(tx, created.id, blockedIds, slotStarts, rules.slotMinutes);
-
-          await this.notifications.notify(
-            {
-              userId: user.id,
-              type: status === Status.CONFIRMED ? 'RESERVATION_CONFIRMED' : 'RESERVATION_PENDING',
-              title:
-                status === Status.CONFIRMED ? 'Reserva confirmada' : 'Reserva pendiente de aprobación',
-              message:
-                status === Status.CONFIRMED
-                  ? `Tu reserva de ${label} quedó confirmada.`
-                  : `Tu reserva de ${label} espera la aprobación del Líder de Conocimiento.`,
-            },
-            tx,
-          );
-
-          if (status === Status.PENDING_APPROVAL) {
-            await this.notifyLeaders(tx, user.fullName, label);
-          }
-
-          await this.audit.log(
-            {
-              userId: user.id,
-              action: 'RESERVATION_CREATED',
-              entity: 'Reservation',
-              entityId: created.id,
-              details: { ...dto, reservationType, status, blockedResources: blockedIds.length },
-            },
-            tx,
-          );
-          return created;
-        },
+        (tx) =>
+          this.createInTx(tx, user, {
+            resource,
+            start,
+            end,
+            purpose: dto.purpose,
+            justification: dto.justification,
+          }),
         { timeout: 20_000 },
       );
       return this.get(reservation.id);
@@ -156,6 +133,89 @@ export class ReservationsService {
       throw error;
     }
   }
+
+  /**
+   * Guarda una reserva nueva con sus franjas, avisos y auditoría, dentro de la transacción "tx".
+   * La usan crear una reserva y aceptar una cesión. No revisa reglas de tiempo ni sanciones:
+   * eso lo hace quien la llama. Si una franja ya está ocupada, lanza el error P2002 de Prisma.
+   */
+  async createInTx(
+    tx: Prisma.TransactionClient,
+    owner: Pick<CurrentUserData, 'id' | 'fullName'>,
+    input: NewReservationInput,
+    options: NewReservationOptions = {},
+  ) {
+    const { resource, start, end } = input;
+    const rules = reservationRules();
+    const reservationType = RESERVATION_TYPE_BY_RESOURCE[resource.type as ResourceType];
+    // El laboratorio completo bloquea también cada una de sus laptops; y una laptop tomada
+    // impide reservar el laboratorio completo en ese horario (choca en la franja de la laptop).
+    const blockedIds =
+      resource.type === 'AI_LAB'
+        ? [resource.id, ...(await this.lookup.activeLaptopIds(resource.id, tx))]
+        : [resource.id];
+    const slotStarts = buildSlotStarts(start, end, rules.slotMinutes);
+    const status = input.purpose === 'TRAINING' ? Status.PENDING_APPROVAL : Status.CONFIRMED;
+    const label = reservationLabel(resource);
+    const justification = input.justification.trim();
+
+    const created = await tx.reservation.create({
+      data: {
+        userId: owner.id,
+        resourceId: resource.id,
+        reservationType,
+        purpose: input.purpose,
+        justification,
+        startDateTime: start,
+        endDateTime: end,
+        status,
+      },
+    });
+
+    await insertSlots(tx, created.id, blockedIds, slotStarts, rules.slotMinutes);
+
+    if (options.notifyOwner !== false) {
+      await this.notifications.notify(
+        {
+          userId: owner.id,
+          type: status === Status.CONFIRMED ? 'RESERVATION_CONFIRMED' : 'RESERVATION_PENDING',
+          title: status === Status.CONFIRMED ? 'Reserva confirmada' : 'Reserva pendiente de aprobación',
+          message:
+            status === Status.CONFIRMED
+              ? `Tu reserva de ${label} quedó confirmada.`
+              : `Tu reserva de ${label} espera la aprobación del Líder de Conocimiento.`,
+        },
+        tx,
+      );
+    }
+
+    if (status === Status.PENDING_APPROVAL) {
+      await this.notifyLeaders(tx, owner.fullName, label);
+    }
+
+    await this.audit.log(
+      {
+        userId: owner.id,
+        action: 'RESERVATION_CREATED',
+        entity: 'Reservation',
+        entityId: created.id,
+        details: {
+          resourceId: resource.id,
+          startDateTime: start,
+          endDateTime: end,
+          purpose: input.purpose,
+          justification,
+          reservationType,
+          status,
+          blockedResources: blockedIds.length,
+          ...options.auditDetails,
+        },
+      },
+      tx,
+    );
+    return created;
+  }
+
 
   // Pendiente: cuando se defina "asociados a cargo", avisar solo al Líder del asociado.
   private async notifyLeaders(tx: Prisma.TransactionClient, requester: string, label: string) {
