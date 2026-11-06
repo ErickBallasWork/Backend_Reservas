@@ -13,6 +13,7 @@ import { ReallocationsModule } from './reallocations/reallocations.module';
 import { ReportsModule } from './reports/reports.module';
 import { ReservationsModule } from './reservations/reservations.module';
 import { SanctionsModule } from './sanctions/sanctions.module';
+import { TransfersModule } from './transfers/transfers.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -34,6 +35,7 @@ import { UsersModule } from './users/users.module';
     ReservationsModule,
     ApprovalsModule,
     ReallocationsModule,
+    TransfersModule,
     DashboardModule,
     ReportsModule,
   ],
