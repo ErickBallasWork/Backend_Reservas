@@ -12,7 +12,14 @@ import { SanctionsService } from './sanctions.service';
 const NOW = new Date('2026-11-11T15:20:00Z');
 
 function overdueReservation(overrides: Record<string, unknown> = {}) {
-  return { id: 'res-1', userId: 'owner', resource: { name: 'Sala A' }, ...overrides };
+  return {
+    id: 'res-1',
+    userId: 'owner',
+    startDateTime: new Date('2026-11-11T15:00:00Z'),
+    resource: { name: 'Sala A' },
+    reallocations: [],
+    ...overrides,
+  };
 }
 
 interface BuildOptions {
@@ -123,6 +130,42 @@ describe('SanctionsService.processNoShows', () => {
 
     const [query] = findMany.mock.calls[0];
     expect(query.where?.userId).toBe('owner');
+  });
+
+  it('marks the no-show without a sanction when it was reallocated with short notice', async () => {
+    const { service, tx, notifications, audit } = build({
+      overdue: [
+        overdueReservation({
+          reallocations: [{ reallocationDate: new Date('2026-11-11T14:45:00Z') }],
+        }),
+      ],
+    });
+
+    const result = await service.processNoShows();
+
+    expect(result.noShows).toBe(1);
+    expect(tx.reservation.updateMany).toHaveBeenCalled();
+    expect(tx.sanction.create).not.toHaveBeenCalled();
+    const [notice] = notifications.notify.mock.calls[0];
+    expect(notice.message).toContain('sin sanción');
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'NO_SHOW_MARKED', details: { sanctioned: false } }),
+      tx,
+    );
+  });
+
+  it('still sanctions a reservation reallocated with enough notice', async () => {
+    const { service, tx } = build({
+      overdue: [
+        overdueReservation({
+          reallocations: [{ reallocationDate: new Date('2026-11-10T09:00:00Z') }],
+        }),
+      ],
+    });
+
+    await service.processNoShows();
+
+    expect(tx.sanction.create).toHaveBeenCalledTimes(1);
   });
 
   it('does not sanction twice when another run marked the reservation first', async () => {

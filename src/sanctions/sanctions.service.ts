@@ -14,6 +14,7 @@ import { ReservationRulesService } from '../config/reservation-rules.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListSanctionsQueryDto, ResolveSanctionDto } from './dto/sanction.dto';
+import { wasReallocatedWithShortNotice } from './no-show-rules';
 
 const SANCTION_INCLUDE = {
   user: { select: { id: true, fullName: true, email: true } },
@@ -77,7 +78,17 @@ export class SanctionsService {
         status: Status.CONFIRMED,
         startDateTime: { lt: deadline, ...(noShowEnforcedFrom ? { gte: noShowEnforcedFrom } : {}) },
       },
-      select: { id: true, userId: true, resource: { select: { name: true } } },
+      select: {
+        id: true,
+        userId: true,
+        startDateTime: true,
+        resource: { select: { name: true } },
+        reallocations: {
+          select: { reallocationDate: true },
+          orderBy: { reallocationDate: 'desc' },
+          take: 1,
+        },
+      },
       orderBy: { startDateTime: 'asc' },
       take: 200,
     });
@@ -91,21 +102,29 @@ export class SanctionsService {
           data: { status: Status.NO_SHOW },
         });
         if (updated.count === 0) return false;
-        await tx.sanction.create({
-          data: {
-            userId: reservation.userId,
-            reservationId: reservation.id,
-            type: 'NO_SHOW',
-            status: 'ACTIVE',
-            reason: `No registró el uso de ${reservation.resource.name}`,
-          },
-        });
+        const sanctioned = !wasReallocatedWithShortNotice(
+          reservation.startDateTime,
+          reservation.reallocations[0]?.reallocationDate,
+        );
+        if (sanctioned) {
+          await tx.sanction.create({
+            data: {
+              userId: reservation.userId,
+              reservationId: reservation.id,
+              type: 'NO_SHOW',
+              status: 'ACTIVE',
+              reason: `No registró el uso de ${reservation.resource.name}`,
+            },
+          });
+        }
         await this.notifications.notify(
           {
             userId: reservation.userId,
             type: 'NO_SHOW_SANCTION',
             title: 'Reserva marcada como inasistencia',
-            message: `No registraste el uso de ${reservation.resource.name}. No podrás reservar hasta que un administrador regularice la sanción.`,
+            message: sanctioned
+              ? `No registraste el uso de ${reservation.resource.name}. No podrás reservar hasta que un administrador regularice la sanción.`
+              : `Tu reserva de ${reservation.resource.name} fue reasignada con poco margen y quedó como inasistencia, sin sanción.`,
           },
           tx,
         );
@@ -115,6 +134,7 @@ export class SanctionsService {
             action: 'NO_SHOW_MARKED',
             entity: 'Reservation',
             entityId: reservation.id,
+            details: { sanctioned },
           },
           tx,
         );
