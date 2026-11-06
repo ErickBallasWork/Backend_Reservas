@@ -25,6 +25,10 @@ describe('ReservationRulesService', () => {
     expect(checkinAfterMin).toBe(15);
   });
 
+  it('sends the reminder one hour before the start (Q-06)', () => {
+    expect(service.current().reminderLeadMin).toBe(60);
+  });
+
   it('returns a copy so callers cannot change the shared rules', () => {
     service.current().minAdvanceHours = 0;
 

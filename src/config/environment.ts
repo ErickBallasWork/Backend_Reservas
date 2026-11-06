@@ -106,6 +106,10 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsISO8601({ strict: true })
   NO_SHOW_ENFORCED_FROM?: string;
+
+  @Transform(toBoolean)
+  @IsBoolean()
+  SCHEDULER_ENABLED = true;
 }
 
 function withoutEmptyValues(raw: Record<string, unknown>): Record<string, unknown> {

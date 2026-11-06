@@ -38,6 +38,13 @@ describe('loadAppConfig', () => {
     expect(config.auth.demoLoginEnabled).toBe(false);
     expect(config.jobs.jobKey).toBeNull();
     expect(config.jobs.noShowEnforcedFrom).toBeNull();
+    expect(config.jobs.schedulerEnabled).toBe(true);
+  });
+
+  it('lets an instance opt out of the in-process scheduler', () => {
+    expect(loadAppConfig(baseEnv({ SCHEDULER_ENABLED: 'false' })).jobs.schedulerEnabled).toBe(
+      false,
+    );
   });
 
   it('treats empty values as missing', () => {

@@ -7,6 +7,7 @@ export interface ReservationRules {
   cancelMinHours: number;
   checkinBeforeMin: number;
   checkinAfterMin: number;
+  reminderLeadMin: number;
 }
 
 export const DEFAULT_RESERVATION_RULES: Readonly<ReservationRules> = Object.freeze({
@@ -16,6 +17,7 @@ export const DEFAULT_RESERVATION_RULES: Readonly<ReservationRules> = Object.free
   cancelMinHours: 24,
   checkinBeforeMin: 15,
   checkinAfterMin: 15,
+  reminderLeadMin: 60,
 });
 
 @Injectable()

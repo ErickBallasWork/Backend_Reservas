@@ -21,6 +21,7 @@ export interface AuthConfig {
 export interface JobsConfig {
   jobKey: string | null;
   noShowEnforcedFrom: Date | null;
+  schedulerEnabled: boolean;
 }
 
 export interface AppConfig {
@@ -53,6 +54,7 @@ export function toAppConfig(env: EnvironmentVariables): AppConfig {
     jobs: {
       jobKey: env.JOB_KEY ?? null,
       noShowEnforcedFrom: env.NO_SHOW_ENFORCED_FROM ? new Date(env.NO_SHOW_ENFORCED_FROM) : null,
+      schedulerEnabled: env.SCHEDULER_ENABLED,
     },
   };
 }

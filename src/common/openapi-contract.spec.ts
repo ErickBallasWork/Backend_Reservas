@@ -30,6 +30,7 @@ import { ReservationsController } from '../reservations/reservations.controller'
 import { ReservationsService } from '../reservations/reservations.service';
 import { NotificationsController } from '../notifications/notifications.controller';
 import { NotificationsService } from '../notifications/notifications.service';
+import { RemindersService } from '../notifications/reminders/reminders.service';
 import { OperatingHoursController } from '../operating-hours/operating-hours.controller';
 import { OperatingHoursService } from '../operating-hours/operating-hours.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -99,6 +100,7 @@ const DOCUMENTED_OPERATIONS: [string, string][] = [
   ['get', '/notifications/unread-count'],
   ['patch', '/notifications/read-all'],
   ['patch', '/notifications/{id}/read'],
+  ['post', '/notifications/jobs/run'],
 ];
 
 function sourceFiles(dir: string): string[] {
@@ -153,6 +155,7 @@ describe('OpenAPI contract', () => {
         { provide: SpocAgendaService, useValue: {} },
         { provide: SanctionsService, useValue: {} },
         { provide: NotificationsService, useValue: {} },
+        { provide: RemindersService, useValue: {} },
         { provide: PrismaService, useValue: {} },
       ],
     }).compile();
