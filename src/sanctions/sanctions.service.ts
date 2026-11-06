@@ -9,10 +9,40 @@ import { AuditService } from '../audit/audit.service';
 import { Status } from '../common/constants';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { toSkipTake } from '../common/pagination.dto';
-import { reservationRules } from '../config/reservation-rules';
+import { AppConfigService } from '../config/app-config.service';
+import { ReservationRulesService } from '../config/reservation-rules.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListSanctionsQueryDto, ResolveSanctionDto } from './dto/sanction.dto';
+import { wasReallocatedWithShortNotice } from './no-show-rules';
+
+const SANCTION_INCLUDE = {
+  user: { select: { id: true, fullName: true, email: true } },
+  resolvedBy: { select: { id: true, fullName: true } },
+  reservation: {
+    select: {
+      id: true,
+      startDateTime: true,
+      endDateTime: true,
+      resource: { select: { name: true } },
+    },
+  },
+} satisfies Prisma.SanctionInclude;
+
+type SanctionRow = Prisma.SanctionGetPayload<{ include: typeof SANCTION_INCLUDE }>;
+
+function toSanctionView(row: SanctionRow) {
+  const { reservation, ...rest } = row;
+  return {
+    ...rest,
+    reservation: {
+      id: reservation.id,
+      startDateTime: reservation.startDateTime,
+      endDateTime: reservation.endDateTime,
+      resourceName: reservation.resource.name,
+    },
+  };
+}
 
 @Injectable()
 export class SanctionsService {
@@ -20,9 +50,10 @@ export class SanctionsService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly audit: AuditService,
+    private readonly reservationRules: ReservationRulesService,
+    private readonly config: AppConfigService,
   ) {}
 
-  /** RF-12: un asociado con sanción activa no puede reservar. */
   async assertNoActiveSanction(userId: string): Promise<void> {
     const sanction = await this.prisma.sanction.findFirst({ where: { userId, status: 'ACTIVE' } });
     if (sanction) {
@@ -34,21 +65,30 @@ export class SanctionsService {
     }
   }
 
-  /**
-   * Marca los No-Show y vence los entrenamientos que nadie aprobó a tiempo.
-   * La llama la tarea programada (POST /sanctions/no-show/run) y, como respaldo, el módulo de
-   * reservas para el usuario que intenta reservar (cálculo bajo demanda, BE-30).
-   */
   async processNoShows(filter: { userId?: string } = {}) {
     const now = new Date();
-    const rules = reservationRules();
+    const rules = this.reservationRules.current();
     const deadline = new Date(now.getTime() - rules.checkinAfterMin * 60_000);
     const byUser: Prisma.ReservationWhereInput = filter.userId ? { userId: filter.userId } : {};
+    const { noShowEnforcedFrom } = this.config.jobs;
 
-    // 1) Reservas confirmadas cuyo plazo de check-in ya pasó sin registro de uso.
     const overdue = await this.prisma.reservation.findMany({
-      where: { ...byUser, status: Status.CONFIRMED, startDateTime: { lt: deadline } },
-      select: { id: true, userId: true, resource: { select: { name: true } } },
+      where: {
+        ...byUser,
+        status: Status.CONFIRMED,
+        startDateTime: { lt: deadline, ...(noShowEnforcedFrom ? { gte: noShowEnforcedFrom } : {}) },
+      },
+      select: {
+        id: true,
+        userId: true,
+        startDateTime: true,
+        resource: { select: { name: true } },
+        reallocations: {
+          select: { reallocationDate: true },
+          orderBy: { reallocationDate: 'desc' },
+          take: 1,
+        },
+      },
       orderBy: { startDateTime: 'asc' },
       take: 200,
     });
@@ -56,32 +96,52 @@ export class SanctionsService {
     let noShows = 0;
     for (const reservation of overdue) {
       const marked = await this.prisma.$transaction(async (tx) => {
-        // updateMany con el estado en el filtro: si otro proceso ya la marcó, no hace nada.
+        // Filtering by status skips rows another run already marked.
         const updated = await tx.reservation.updateMany({
           where: { id: reservation.id, status: Status.CONFIRMED },
           data: { status: Status.NO_SHOW },
         });
         if (updated.count === 0) return false;
-        await tx.sanction.create({
-          data: {
-            userId: reservation.userId,
-            reservationId: reservation.id,
-            type: 'NO_SHOW',
-            status: 'ACTIVE',
-            reason: `No registró el uso de ${reservation.resource.name}`,
-          },
-        });
+        const sanctioned = !wasReallocatedWithShortNotice(
+          reservation.startDateTime,
+          reservation.reallocations[0]?.reallocationDate,
+        );
+        if (sanctioned) {
+          await tx.sanction.create({
+            data: {
+              userId: reservation.userId,
+              reservationId: reservation.id,
+              type: 'NO_SHOW',
+              status: 'ACTIVE',
+              reason: `No registró el uso de ${reservation.resource.name}`,
+            },
+          });
+        }
+        await this.notifications.resolveForReservation(
+          reservation.id,
+          ['RESERVATION_REMINDER'],
+          tx,
+        );
         await this.notifications.notify(
           {
             userId: reservation.userId,
-            type: 'NO_SHOW_SANCTION',
+            reservationId: reservation.id,
+            type: sanctioned ? 'NO_SHOW_SANCTION' : 'NO_SHOW_NO_SANCTION',
             title: 'Reserva marcada como inasistencia',
-            message: `No registraste el uso de ${reservation.resource.name}. No podrás reservar hasta que un administrador regularice la sanción.`,
+            message: sanctioned
+              ? `No registraste el uso de ${reservation.resource.name}. No podrás reservar hasta que un administrador regularice la sanción.`
+              : `Tu reserva de ${reservation.resource.name} fue reasignada con poco margen y quedó como inasistencia, sin sanción.`,
           },
           tx,
         );
         await this.audit.log(
-          { userId: null, action: 'NO_SHOW_MARKED', entity: 'Reservation', entityId: reservation.id },
+          {
+            userId: null,
+            action: 'NO_SHOW_MARKED',
+            entity: 'Reservation',
+            entityId: reservation.id,
+            details: { sanctioned },
+          },
           tx,
         );
         return true;
@@ -89,7 +149,6 @@ export class SanctionsService {
       if (marked) noShows++;
     }
 
-    // 2) Entrenamientos pendientes cuyo inicio ya pasó: se rechazan solos y se libera el horario.
     const expired = await this.prisma.reservation.findMany({
       where: { ...byUser, status: Status.PENDING_APPROVAL, startDateTime: { lte: now } },
       select: { id: true, userId: true, resource: { select: { name: true } } },
@@ -108,6 +167,7 @@ export class SanctionsService {
         await this.notifications.notify(
           {
             userId: reservation.userId,
+            reservationId: reservation.id,
             type: 'TRAINING_EXPIRED',
             title: 'Solicitud de entrenamiento vencida',
             message: `Tu solicitud para ${reservation.resource.name} no fue aprobada antes de su inicio.`,
@@ -115,7 +175,12 @@ export class SanctionsService {
           tx,
         );
         await this.audit.log(
-          { userId: null, action: 'TRAINING_EXPIRED', entity: 'Reservation', entityId: reservation.id },
+          {
+            userId: null,
+            action: 'TRAINING_EXPIRED',
+            entity: 'Reservation',
+            entityId: reservation.id,
+          },
           tx,
         );
         return true;
@@ -131,50 +196,56 @@ export class SanctionsService {
       ...(query.status ? { status: query.status } : {}),
       ...(query.userId ? { userId: query.userId } : {}),
     };
-    const [items, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       this.prisma.sanction.findMany({
         where,
-        include: {
-          user: { select: { id: true, fullName: true, email: true } },
-          resolvedBy: { select: { id: true, fullName: true } },
-          reservation: {
-            select: {
-              id: true,
-              startDateTime: true,
-              endDateTime: true,
-              resource: { select: { name: true } },
-            },
-          },
-        },
+        include: SANCTION_INCLUDE,
         orderBy: { startDate: 'desc' },
         ...toSkipTake(query),
       }),
       this.prisma.sanction.count({ where }),
     ]);
-    return { total, page: query.page, pageSize: query.pageSize, items };
+    return { total, page: query.page, pageSize: query.pageSize, items: rows.map(toSanctionView) };
   }
 
-  /** HU-22: el Administrador regulariza la sanción; queda registrado quién y cuándo. */
   async resolve(admin: CurrentUserData, id: string, dto: ResolveSanctionDto) {
     const sanction = await this.prisma.sanction.findUnique({ where: { id } });
     if (!sanction) {
-      throw new NotFoundException({ code: 'SANCTION_NOT_FOUND', message: `No existe la sanción ${id}` });
+      throw new NotFoundException({
+        code: 'SANCTION_NOT_FOUND',
+        message: `No existe la sanción ${id}`,
+      });
     }
     if (sanction.status !== 'ACTIVE') {
-      throw new ConflictException({ code: 'ALREADY_RESOLVED', message: 'La sanción ya fue regularizada' });
+      throw new ConflictException({
+        code: 'ALREADY_RESOLVED',
+        message: 'La sanción ya fue regularizada',
+      });
     }
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
-      const resolved = await tx.sanction.update({
-        where: { id },
-        data: { status: 'RESOLVED', endDate: now, resolvedById: admin.id, resolvedAt: now },
+      const updated = await tx.sanction.updateMany({
+        where: { id, status: 'ACTIVE' },
+        data: {
+          status: 'RESOLVED',
+          endDate: now,
+          resolvedById: admin.id,
+          resolvedAt: now,
+          resolutionComment: dto.comment,
+        },
       });
+      if (updated.count === 0) {
+        throw new ConflictException({
+          code: 'ALREADY_RESOLVED',
+          message: 'La sanción ya fue regularizada',
+        });
+      }
       await this.notifications.notify(
         {
           userId: sanction.userId,
           type: 'SANCTION_RESOLVED',
           title: 'Sanción regularizada',
-          message: 'Ya puedes volver a reservar.',
+          message: `Ya puedes volver a reservar. Motivo: ${dto.comment}`,
         },
         tx,
       );
@@ -184,11 +255,19 @@ export class SanctionsService {
           action: 'SANCTION_RESOLVED',
           entity: 'Sanction',
           entityId: id,
-          details: { comment: dto.comment ?? null },
+          details: {
+            comment: dto.comment,
+            affectedUserId: sanction.userId,
+            reservationId: sanction.reservationId,
+          },
         },
         tx,
       );
-      return resolved;
+      const resolved = await tx.sanction.findUniqueOrThrow({
+        where: { id },
+        include: SANCTION_INCLUDE,
+      });
+      return toSanctionView(resolved);
     });
   }
 }

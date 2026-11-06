@@ -1,21 +1,39 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { reservationRules } from '../config/reservation-rules';
+import { CatalogLookupService } from '../catalog/catalog-lookup.service';
+import { ReservationRulesService } from '../config/reservation-rules.service';
+import {
+  findClosedSlot,
+  toLocalSlots,
+  toOpenWindows,
+  type OperatingCalendar,
+} from '../operating-hours/operating-calendar';
+import { OperatingHoursService } from '../operating-hours/operating-hours.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { chunk } from '../reservations/time-rules';
+import { buildSlotStarts } from '../reservations/time-rules';
+import { BusySlotsReader } from './busy-slots.reader';
 import { RangeQueryDto, SearchAvailabilityQueryDto } from './dto/availability.dto';
 
 const MAX_RANGE_DAYS = 14;
 
 @Injectable()
 export class AvailabilityService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly reservationRules: ReservationRulesService,
+    private readonly lookup: CatalogLookupService,
+    private readonly operatingHours: OperatingHoursService,
+    private readonly busySlots: BusySlotsReader,
+  ) {}
 
   private parseRange(query: RangeQueryDto) {
     const from = new Date(query.from);
     const to = new Date(query.to);
     if (to.getTime() <= from.getTime()) {
-      throw new BadRequestException({ code: 'INVALID_RANGE', message: '"to" debe ser posterior a "from"' });
+      throw new BadRequestException({
+        code: 'INVALID_RANGE',
+        message: '"to" debe ser posterior a "from"',
+      });
     }
     if (to.getTime() - from.getTime() > MAX_RANGE_DAYS * 24 * 3_600_000) {
       throw new BadRequestException({
@@ -26,54 +44,57 @@ export class AvailabilityService {
     return { from, to };
   }
 
-  /** Franjas ocupadas de cada recurso en el rango (inicio de cada franja en ISO). */
-  private async busyByResource(resourceIds: string[], from: Date, to: Date) {
-    const busy = new Map<string, string[]>();
-    for (const id of resourceIds) busy.set(id, []);
-    // De a 500 ids para no pasar el límite de parámetros de SQL Server.
-    for (const ids of chunk(resourceIds, 500)) {
-      const slots = await this.prisma.reservationSlot.findMany({
-        where: { resourceId: { in: ids }, slotStart: { gte: from, lt: to } },
-        select: { resourceId: true, slotStart: true },
-        orderBy: { slotStart: 'asc' },
-      });
-      for (const slot of slots) busy.get(slot.resourceId)?.push(slot.slotStart.toISOString());
-    }
-    return busy;
+  private rangeSlots(from: Date, to: Date) {
+    const slotMinutes = this.reservationRules.current().slotMinutes;
+    return {
+      slotMinutes,
+      slots: toLocalSlots(buildSlotStarts(from, to, slotMinutes), this.operatingHours.timeZone),
+    };
   }
 
-  /**
-   * HU-06: detalle de un recurso. Devuelve sus franjas ocupadas y, si es laboratorio, las de cada
-   * laptop. Si el laboratorio tiene una franja ocupada, está reservado completo y sus laptops se
-   * muestran bloqueadas en esa franja.
-   */
   async resource(resourceId: string, query: RangeQueryDto) {
     const { from, to } = this.parseRange(query);
+    await this.lookup.getActiveResource(resourceId);
     const resource = await this.prisma.resource.findUnique({
       where: { id: resourceId },
       include: { children: { where: { isActive: true }, orderBy: { name: 'asc' } } },
     });
     if (!resource) {
-      throw new NotFoundException({ code: 'RESOURCE_NOT_FOUND', message: `No existe el recurso ${resourceId}` });
+      throw new NotFoundException({
+        code: 'RESOURCE_NOT_FOUND',
+        message: `No existe el recurso ${resourceId}`,
+      });
     }
-    const busy = await this.busyByResource([resource.id, ...resource.children.map((c) => c.id)], from, to);
+    const busy = await this.busySlots.byResource(
+      [resource.id, ...resource.children.map((c) => c.id)],
+      from,
+      to,
+    );
+    const { slotMinutes, slots } = this.rangeSlots(from, to);
+    const book = await this.operatingHours.loadBook();
+    const windowsOf = (calendar: OperatingCalendar) =>
+      toOpenWindows(slots, slotMinutes, calendar).map((w) => ({
+        start: w.start.toISOString(),
+        end: w.end.toISOString(),
+      }));
     return {
       resourceId: resource.id,
       name: resource.name,
       type: resource.type,
-      slotMinutes: reservationRules().slotMinutes,
+      slotMinutes,
       from: from.toISOString(),
       to: to.toISOString(),
       busySlots: busy.get(resource.id) ?? [],
+      openWindows: windowsOf(book.calendarFor(resource)),
       laptops: resource.children.map((l) => ({
         id: l.id,
         name: l.name,
         busySlots: busy.get(l.id) ?? [],
+        openWindows: windowsOf(book.calendarFor(l)),
       })),
     };
   }
 
-  /** HU-06: salas y laboratorios libres en todo el rango (filtros: edificio, tipo, capacidad). */
   async search(query: SearchAvailabilityQueryDto) {
     const { from, to } = this.parseRange(query);
     const where: Prisma.ResourceWhereInput = {
@@ -94,11 +115,17 @@ export class AvailabilityService {
     });
 
     const ids = resources.flatMap((r) => [r.id, ...r.children.map((c) => c.id)]);
-    const busy = ids.length > 0 ? await this.busyByResource(ids, from, to) : new Map<string, string[]>();
+    const busy =
+      ids.length > 0 ? await this.busySlots.byResource(ids, from, to) : new Map<string, string[]>();
     const isFree = (id: string) => (busy.get(id) ?? []).length === 0;
+    const { slotMinutes, slots } = this.rangeSlots(from, to);
+    const book = await this.operatingHours.loadBook();
+    const isOpen = (resource: { id: string; parentResourceId: string | null }) =>
+      findClosedSlot(slots, slotMinutes, book.calendarFor(resource)) === null;
 
     return resources.map((r) => {
       const freeLaptops = r.children.filter((c) => isFree(c.id)).length;
+      const open = isOpen(r);
       return {
         id: r.id,
         name: r.name,
@@ -106,8 +133,10 @@ export class AvailabilityService {
         capacity: r.capacity,
         equipment: r.equipment,
         building: r.building,
-        // Sala: libre si nadie la reservó. Laboratorio: libre completo si él y todas sus laptops lo están.
-        free: r.type === 'AI_LAB' ? isFree(r.id) && freeLaptops === r.children.length : isFree(r.id),
+        open,
+        free:
+          open &&
+          (r.type === 'AI_LAB' ? isFree(r.id) && freeLaptops === r.children.length : isFree(r.id)),
         ...(r.type === 'AI_LAB' ? { totalLaptops: r.children.length, freeLaptops } : {}),
       };
     });

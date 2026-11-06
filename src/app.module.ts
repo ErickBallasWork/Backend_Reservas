@@ -1,35 +1,39 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { AccessRequestsModule } from './access-requests/access-requests.module';
 import { ApprovalsModule } from './approvals/approvals.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { AvailabilityModule } from './availability/availability.module';
 import { CatalogModule } from './catalog/catalog.module';
+import { AppConfigModule } from './config/app-config.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { FloorPlansModule } from './floor-plans/floor-plans.module';
 import { HealthModule } from './health/health.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { OperatingHoursModule } from './operating-hours/operating-hours.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ReallocationsModule } from './reallocations/reallocations.module';
 import { ReportsModule } from './reports/reports.module';
 import { ReservationsModule } from './reservations/reservations.module';
 import { SanctionsModule } from './sanctions/sanctions.module';
+import { ThrottlingModule } from './throttling/throttling.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
-    // Carga el archivo .env en process.env
-    ConfigModule.forRoot({ isGlobal: true }),
-    // Base de datos y servicios transversales (globales)
+    AppConfigModule,
+    ThrottlingModule,
     PrismaModule,
     AuditModule,
     NotificationsModule,
     HealthModule,
-    // Inicio de sesión (Google o demo) y guard global de sesión y roles
     AuthModule,
-    // Módulos de negocio
     UsersModule,
+    AccessRequestsModule,
     CatalogModule,
+    OperatingHoursModule,
     AvailabilityModule,
+    FloorPlansModule,
     SanctionsModule,
     ReservationsModule,
     ApprovalsModule,

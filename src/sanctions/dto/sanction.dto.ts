@@ -1,10 +1,11 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import { IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { SANCTION_STATUSES } from '../../common/constants';
 import { PaginationQueryDto } from '../../common/pagination.dto';
 
 export class ListSanctionsQueryDto extends PaginationQueryDto {
-  @ApiProperty({ enum: [...SANCTION_STATUSES], required: false })
+  @ApiPropertyOptional({ enum: [...SANCTION_STATUSES] })
   @IsOptional()
   @IsIn([...SANCTION_STATUSES])
   status?: string;
@@ -15,9 +16,10 @@ export class ListSanctionsQueryDto extends PaginationQueryDto {
 }
 
 export class ResolveSanctionDto {
-  /** Comentario opcional del administrador */
-  @IsOptional()
+  @ApiProperty({ description: 'Reason the administrator regularizes the sanction', maxLength: 500 })
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
+  @IsNotEmpty()
   @MaxLength(500)
-  comment?: string;
+  comment!: string;
 }

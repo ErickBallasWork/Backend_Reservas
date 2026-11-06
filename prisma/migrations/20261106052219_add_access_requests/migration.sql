@@ -1,0 +1,45 @@
+BEGIN TRY
+
+BEGIN TRAN;
+
+-- CreateTable
+CREATE TABLE [dbo].[ACCESS_REQUEST] (
+    [Id] UNIQUEIDENTIFIER NOT NULL,
+    [Email] NVARCHAR(320) NOT NULL,
+    [FullName] NVARCHAR(200) NOT NULL,
+    [Department] NVARCHAR(120),
+    [Kind] NVARCHAR(12) NOT NULL,
+    [Status] NVARCHAR(10) NOT NULL CONSTRAINT [ACCESS_REQUEST_Status_df] DEFAULT 'PENDING',
+    [DeviceSecretHash] NVARCHAR(64) NOT NULL,
+    [DeviceLabel] NVARCHAR(200),
+    [RequestedAt] DATETIME2 NOT NULL CONSTRAINT [ACCESS_REQUEST_RequestedAt_df] DEFAULT CURRENT_TIMESTAMP,
+    [DecidedAt] DATETIME2,
+    [DecidedById] UNIQUEIDENTIFIER,
+    [DecisionComment] NVARCHAR(500),
+    CONSTRAINT [ACCESS_REQUEST_pkey] PRIMARY KEY CLUSTERED ([Id])
+);
+
+-- CreateIndex
+CREATE NONCLUSTERED INDEX [ACCESS_REQUEST_Status_RequestedAt_idx] ON [dbo].[ACCESS_REQUEST]([Status], [RequestedAt]);
+
+-- CreateIndex
+CREATE NONCLUSTERED INDEX [ACCESS_REQUEST_Email_Status_idx] ON [dbo].[ACCESS_REQUEST]([Email], [Status]);
+
+-- AddForeignKey
+ALTER TABLE [dbo].[ACCESS_REQUEST] ADD CONSTRAINT [ACCESS_REQUEST_DecidedById_fkey] FOREIGN KEY ([DecidedById]) REFERENCES [dbo].[USERS]([Id]) ON DELETE NO ACTION ON UPDATE NO ACTION;
+
+-- A person can have only one pending request at a time (filtered index, not expressible in Prisma)
+CREATE UNIQUE INDEX [ACCESS_REQUEST_Email_pending_key] ON [dbo].[ACCESS_REQUEST]([Email]) WHERE [Status] = 'PENDING';
+
+COMMIT TRAN;
+
+END TRY
+BEGIN CATCH
+
+IF @@TRANCOUNT > 0
+BEGIN
+    ROLLBACK TRAN;
+END;
+THROW
+
+END CATCH

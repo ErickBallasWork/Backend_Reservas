@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -11,31 +11,32 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { RESOURCE_TYPES } from '../../common/constants';
+import { RESOURCE_TYPES, type ResourceType } from '../../common/constants';
 
 export class CreateResourceDto {
-  /** MEETING_ROOM (sala), AI_LAB (laboratorio de IA) o LAPTOP */
-  @ApiProperty({ enum: [...RESOURCE_TYPES] })
+  @ApiProperty({ enum: RESOURCE_TYPES, enumName: 'ResourceType' })
   @IsIn([...RESOURCE_TYPES])
-  type: string;
+  type!: ResourceType;
 
-  /** Obligatorio para salas y laboratorios. Para una laptop se toma el edificio de su laboratorio. */
+  @ApiPropertyOptional({
+    description: 'Required for rooms and labs. A laptop takes the building of its lab',
+  })
   @IsOptional()
   @IsUUID()
   buildingId?: string;
 
-  /** Solo LAPTOP: id del laboratorio de IA al que pertenece */
+  @ApiPropertyOptional({ description: 'LAPTOP only: id of the AI lab it belongs to' })
   @IsOptional()
   @IsUUID()
   parentResourceId?: string;
 
-  /** Nombre (único dentro del edificio), por ejemplo "Sala Cotopaxi" o "LAP-IA-06" */
+  @ApiProperty({ description: 'Unique within the building', example: 'Sala Cotopaxi' })
   @IsString()
   @IsNotEmpty()
   @MaxLength(150)
-  name: string;
+  name!: string;
 
-  /** Número de personas (para laptops, 1) */
+  @ApiPropertyOptional({ description: 'Number of people (1 for laptops)' })
   @IsOptional()
   @IsInt()
   @Min(1)
@@ -51,7 +52,7 @@ export class CreateResourceDto {
   @MaxLength(500)
   rules?: string;
 
-  /** Solo LAPTOP: código de inventario */
+  @ApiPropertyOptional({ description: 'LAPTOP only: inventory code' })
   @IsOptional()
   @IsString()
   @MaxLength(50)
@@ -65,6 +66,13 @@ export class UpdateResourceDto {
   @MaxLength(150)
   name?: string;
 
+  @ApiPropertyOptional({
+    description: 'Rooms and labs only: moves it (and the laptops of a lab) to another building',
+  })
+  @IsOptional()
+  @IsUUID()
+  buildingId?: string;
+
   @IsOptional()
   @IsInt()
   @Min(1)
@@ -85,12 +93,12 @@ export class UpdateResourceDto {
   @MaxLength(50)
   assetTag?: string;
 
-  /** Solo LAPTOP: moverla a otro laboratorio */
+  @ApiPropertyOptional({ description: 'LAPTOP only: moves it to another lab' })
   @IsOptional()
   @IsUUID()
   parentResourceId?: string;
 
-  /** false para inactivar (no se borra) */
+  @ApiPropertyOptional({ description: 'false deactivates the resource without deleting it' })
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
@@ -101,12 +109,12 @@ export class ListResourcesQueryDto {
   @IsUUID()
   buildingId?: string;
 
-  @ApiProperty({ enum: [...RESOURCE_TYPES], required: false })
+  @ApiPropertyOptional({ enum: RESOURCE_TYPES, enumName: 'ResourceType' })
   @IsOptional()
   @IsIn([...RESOURCE_TYPES])
-  type?: string;
+  type?: ResourceType;
 
-  /** Laptops de un laboratorio */
+  @ApiPropertyOptional({ description: 'Returns the laptops of this lab' })
   @IsOptional()
   @IsUUID()
   parentResourceId?: string;
@@ -116,7 +124,7 @@ export class ListResourcesQueryDto {
   @IsBoolean()
   includeInactive?: boolean;
 
-  /** Capacidad mínima */
+  @ApiPropertyOptional({ description: 'Minimum capacity' })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

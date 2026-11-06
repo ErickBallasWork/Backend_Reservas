@@ -1,25 +1,27 @@
-import { Controller, Get } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { PrismaService } from '../prisma/prisma.service';
+import { Controller, Get, Query } from '@nestjs/common';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../common/current-user/current-user.decorator';
+import { CurrentUserData } from '../common/current-user/current-user.types';
+import { ApiErrorResponses } from '../common/error-response.dto';
+import { CatalogTreeService } from './catalog-tree.service';
+import { assertMayListInactive } from './catalog-visibility';
+import { ListBuildingsQueryDto } from './dto/building.dto';
+import { CatalogBuildingNodeDto } from './dto/catalog-response.dto';
 
 @ApiTags('Catálogo: árbol')
+@ApiErrorResponses(401, 403)
 @Controller('catalog')
 export class CatalogController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly catalogTree: CatalogTreeService) {}
 
   @Get('tree')
-  @ApiOperation({ summary: 'Catálogo completo: edificio > sala o laboratorio > laptop (HU-04)' })
-  tree() {
-    return this.prisma.building.findMany({
-      where: { isActive: true },
-      orderBy: { name: 'asc' },
-      include: {
-        resources: {
-          where: { isActive: true, parentResourceId: null },
-          orderBy: [{ type: 'asc' }, { name: 'asc' }],
-          include: { children: { where: { isActive: true }, orderBy: { name: 'asc' } } },
-        },
-      },
-    });
+  @ApiOkResponse({ type: [CatalogBuildingNodeDto] })
+  @ApiOperation({
+    summary:
+      'Catálogo completo: edificio > sala o laboratorio > laptop (HU-04). includeInactive solo para administradores',
+  })
+  tree(@CurrentUser() user: CurrentUserData, @Query() query: ListBuildingsQueryDto) {
+    assertMayListInactive(user, query.includeInactive);
+    return this.catalogTree.tree(query.includeInactive);
   }
 }

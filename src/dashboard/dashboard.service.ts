@@ -1,64 +1,90 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { PURPOSES, RESERVATION_STATUSES } from '../common/constants';
+import { type CurrentUserData } from '../common/current-user/current-user.types';
 import { toSkipTake } from '../common/pagination.dto';
 import { PrismaService } from '../prisma/prisma.service';
-import { RESERVATION_INCLUDE } from '../reservations/reservations.service';
+import { ApprovalRoutingService } from '../reservations/approval-routing.service';
+import { APPROVALS_INCLUDE, RESERVATION_INCLUDE } from '../reservations/reservations.service';
 import { DashboardQueryDto, MetricsQueryDto } from './dto/dashboard.dto';
 
-// Filtros comunes: rango de fechas (por inicio) y edificio.
-function baseWhere(query: MetricsQueryDto): Prisma.ReservationWhereInput {
-  const range =
-    query.from || query.to
+export const DASHBOARD_VIEWED = 'DASHBOARD_VIEWED';
+
+export function rangeAndBuildingWhere(query: MetricsQueryDto): Prisma.ReservationWhereInput {
+  return {
+    ...(query.from || query.to
       ? {
           startDateTime: {
             ...(query.from ? { gte: new Date(query.from) } : {}),
             ...(query.to ? { lt: new Date(query.to) } : {}),
           },
         }
-      : {};
-  return {
-    ...range,
+      : {}),
     ...(query.buildingId ? { resource: { buildingId: query.buildingId } } : {}),
   };
 }
 
-function countBy<T extends string>(keys: readonly T[], rows: { key: string; count: number }[]) {
-  const result: Record<string, number> = Object.fromEntries(keys.map((k) => [k, 0]));
+export function countBy(keys: readonly string[], rows: { key: string; count: number }[]) {
+  const result: Record<string, number> = Object.fromEntries(keys.map((key) => [key, 0]));
   for (const row of rows) result[row.key] = (result[row.key] ?? 0) + row.count;
   return result;
 }
 
-/**
- * HU-16: panel del SPOC Administrativo y del Líder de Conocimiento.
- * Pendiente: cuando se defina "asociados a su cargo", el Líder verá solo a esos usuarios.
- */
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly routing: ApprovalRoutingService,
+    private readonly audit: AuditService,
+  ) {}
 
-  async reservations(query: DashboardQueryDto) {
+  async reservations(viewer: CurrentUserData, query: DashboardQueryDto) {
     const where: Prisma.ReservationWhereInput = {
-      ...baseWhere(query),
-      ...(query.status ? { status: query.status } : {}),
-      ...(query.purpose ? { purpose: query.purpose } : {}),
-      ...(query.userId ? { userId: query.userId } : {}),
-      ...(query.resourceId ? { resourceId: query.resourceId } : {}),
+      AND: [
+        this.routing.managedOwnersFilter(viewer),
+        rangeAndBuildingWhere(query),
+        {
+          ...(query.status ? { status: query.status } : {}),
+          ...(query.purpose ? { purpose: query.purpose } : {}),
+          ...(query.userId ? { userId: query.userId } : {}),
+          ...(query.resourceId ? { resourceId: query.resourceId } : {}),
+        },
+      ],
     };
     const [items, total] = await Promise.all([
       this.prisma.reservation.findMany({
         where,
-        include: RESERVATION_INCLUDE,
+        include: { ...RESERVATION_INCLUDE, approvals: APPROVALS_INCLUDE },
         orderBy: { startDateTime: 'desc' },
         ...toSkipTake(query),
       }),
       this.prisma.reservation.count({ where }),
     ]);
+    if (query.refresh !== 'true') {
+      await this.audit.log({
+        userId: viewer.id,
+        action: DASHBOARD_VIEWED,
+        entity: 'Reservation',
+        details: {
+          from: query.from,
+          to: query.to,
+          buildingId: query.buildingId,
+          status: query.status,
+          purpose: query.purpose,
+          userId: query.userId,
+          resourceId: query.resourceId,
+          page: query.page,
+        },
+      });
+    }
     return { total, page: query.page, pageSize: query.pageSize, items };
   }
 
-  async metrics(query: MetricsQueryDto) {
-    const where = baseWhere(query);
+  async metrics(viewer: CurrentUserData, query: MetricsQueryDto) {
+    const where: Prisma.ReservationWhereInput = {
+      AND: [this.routing.managedOwnersFilter(viewer), rangeAndBuildingWhere(query)],
+    };
     const [byStatusRows, byPurposeRows, byTypeRows, total] = await Promise.all([
       this.prisma.reservation.groupBy({ by: ['status'], where, _count: { _all: true } }),
       this.prisma.reservation.groupBy({ by: ['purpose'], where, _count: { _all: true } }),
@@ -68,18 +94,17 @@ export class DashboardService {
 
     const byStatus = countBy(
       RESERVATION_STATUSES,
-      byStatusRows.map((r) => ({ key: r.status, count: r._count._all })),
+      byStatusRows.map((row) => ({ key: row.status, count: row._count._all })),
     );
     const byPurpose = countBy(
       PURPOSES,
-      byPurposeRows.map((r) => ({ key: r.purpose, count: r._count._all })),
+      byPurposeRows.map((row) => ({ key: row.purpose, count: row._count._all })),
     );
     const byReservationType = countBy(
       ['ROOM', 'FULL_LAB', 'LAPTOP'],
-      byTypeRows.map((r) => ({ key: r.reservationType, count: r._count._all })),
+      byTypeRows.map((row) => ({ key: row.reservationType, count: row._count._all })),
     );
 
-    // Inasistencia sobre las reservas que ya debían usarse (con check-in o No-Show).
     const finished = byStatus.CHECKED_IN + byStatus.NO_SHOW;
     return {
       total,

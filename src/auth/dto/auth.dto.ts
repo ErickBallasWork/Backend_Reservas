@@ -1,14 +1,15 @@
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
-
-export class GoogleLoginDto {
-  /** El "credential" (ID token) que entrega el botón de Google en el frontend */
-  @IsString()
-  @IsNotEmpty()
-  credential: string;
-}
+import { ApiProperty } from '@nestjs/swagger';
+import { IsEmail, IsString, Length } from 'class-validator';
 
 export class DemoLoginDto {
-  /** Correo de un usuario demo, por ejemplo admin@demo.com */
+  @ApiProperty({ description: 'Email of a demo user', example: 'admin@demo.com' })
   @IsEmail()
-  email: string;
+  email!: string;
+}
+
+export class RefreshDto {
+  @ApiProperty({ description: 'Refresh token of the approved device' })
+  @IsString()
+  @Length(43, 128)
+  refreshToken!: string;
 }

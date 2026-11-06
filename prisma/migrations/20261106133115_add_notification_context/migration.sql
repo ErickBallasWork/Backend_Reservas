@@ -1,0 +1,34 @@
+BEGIN TRY
+
+BEGIN TRAN;
+
+-- AlterTable
+ALTER TABLE [dbo].[NOTIFICATION] ADD [AccessRequestId] UNIQUEIDENTIFIER,
+[EventAt] DATETIME2,
+[ExpiresAt] DATETIME2,
+[ReservationId] UNIQUEIDENTIFIER;
+
+-- AlterTable
+ALTER TABLE [dbo].[RESERVATION] ADD [ReminderSentAt] DATETIME2;
+
+-- CreateIndex
+CREATE NONCLUSTERED INDEX [NOTIFICATION_UserId_Channel_CreatedAt_idx] ON [dbo].[NOTIFICATION]([UserId], [Channel], [CreatedAt]);
+
+-- CreateIndex
+CREATE NONCLUSTERED INDEX [NOTIFICATION_ReservationId_idx] ON [dbo].[NOTIFICATION]([ReservationId]);
+
+-- CreateIndex
+CREATE NONCLUSTERED INDEX [NOTIFICATION_AccessRequestId_idx] ON [dbo].[NOTIFICATION]([AccessRequestId]);
+
+COMMIT TRAN;
+
+END TRY
+BEGIN CATCH
+
+IF @@TRANCOUNT > 0
+BEGIN
+    ROLLBACK TRAN;
+END;
+THROW
+
+END CATCH

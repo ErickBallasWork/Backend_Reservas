@@ -1,46 +1,118 @@
-import { Controller, Get, Headers, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Put,
+  Query,
+  Req,
+} from '@nestjs/common';
+import type { Request } from 'express';
+import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../common/current-user/current-user.decorator';
 import { CurrentUserData } from '../common/current-user/current-user.types';
-import { Public } from '../common/current-user/public.decorator';
-import { assertJobKey } from '../common/job-key';
-import { NotificationsQueryDto } from './notifications-query.dto';
+import { AppConfigService } from '../config/app-config.service';
+import { JobEndpoint } from '../common/guards/job-endpoint.decorator';
+import { Throttle } from '@nestjs/throttler';
+import { limitFor } from '../throttling/rate-limits';
+import { NotificationsQueryDto } from './dto/notifications-query.dto';
+import {
+  MarkAllReadResponseDto,
+  NotificationPageResponseDto,
+  NotificationResponseDto,
+  RunNotificationJobsResponseDto,
+  UnreadCountResponseDto,
+} from './dto/notification-response.dto';
 import { NotificationsService } from './notifications.service';
+import {
+  PushConfigResponseDto,
+  PushSubscriptionResponseDto,
+  RegisterPushSubscriptionDto,
+  RemovePushSubscriptionDto,
+  RemovePushSubscriptionResponseDto,
+} from './push/dto/push.dto';
+import { PushDispatcherService } from './push/push-dispatcher.service';
+import { PushSubscriptionsService } from './push/push-subscriptions.service';
+import { RemindersService } from './reminders/reminders.service';
 
 @ApiTags('Notificaciones')
 @Controller('notifications')
 export class NotificationsController {
-  constructor(private readonly notifications: NotificationsService) {}
+  constructor(
+    private readonly notifications: NotificationsService,
+    private readonly reminders: RemindersService,
+    private readonly pushSubscriptions: PushSubscriptionsService,
+    private readonly pushDispatcher: PushDispatcherService,
+    private readonly appConfig: AppConfigService,
+  ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Mi bandeja de avisos (la app la consulta cada 30 s)' })
+  @Throttle(limitFor('notificationsPolling'))
+  @ApiOkResponse({ type: NotificationPageResponseDto })
+  @ApiOperation({ summary: 'Mi bandeja de avisos' })
   listMine(@CurrentUser() user: CurrentUserData, @Query() query: NotificationsQueryDto) {
     return this.notifications.listMine(user.id, query);
   }
 
   @Get('unread-count')
-  @ApiOperation({ summary: 'Número de avisos sin leer (para la campana)' })
+  @Throttle(limitFor('notificationsPolling'))
+  @ApiOkResponse({ type: UnreadCountResponseDto })
+  @ApiOperation({ summary: 'Número de avisos sin leer (para el contador)' })
   unreadCount(@CurrentUser() user: CurrentUserData) {
     return this.notifications.unreadCount(user.id);
   }
 
+  @Get('push-config')
+  @ApiOkResponse({ type: PushConfigResponseDto })
+  @ApiOperation({ summary: 'Clave pública para suscribir este navegador a los avisos push' })
+  pushConfig() {
+    const push = this.appConfig.push;
+    return { enabled: push !== null, publicKey: push?.publicKey ?? null };
+  }
+
+  @Put('push-subscription')
+  @ApiOkResponse({ type: PushSubscriptionResponseDto })
+  @ApiOperation({ summary: 'Registrar este navegador para recibir avisos con la app cerrada' })
+  registerPush(
+    @CurrentUser() user: CurrentUserData,
+    @Body() dto: RegisterPushSubscriptionDto,
+    @Req() request: Request,
+  ) {
+    return this.pushSubscriptions.register(user.id, dto, request.header('user-agent'));
+  }
+
+  @Delete('push-subscription')
+  @ApiOkResponse({ type: RemovePushSubscriptionResponseDto })
+  @ApiOperation({ summary: 'Dejar de recibir avisos push en este navegador' })
+  removePush(@CurrentUser() user: CurrentUserData, @Body() dto: RemovePushSubscriptionDto) {
+    return this.pushSubscriptions.remove(user.id, dto.endpoint);
+  }
+
   @Patch('read-all')
+  @ApiOkResponse({ type: MarkAllReadResponseDto })
   @ApiOperation({ summary: 'Marcar todos mis avisos como leídos' })
   markAllRead(@CurrentUser() user: CurrentUserData) {
     return this.notifications.markAllRead(user.id);
   }
 
   @Patch(':id/read')
+  @ApiOkResponse({ type: NotificationResponseDto })
   @ApiOperation({ summary: 'Marcar un aviso como leído' })
   markRead(@CurrentUser() user: CurrentUserData, @Param('id', ParseUUIDPipe) id: string) {
     return this.notifications.markRead(user.id, id);
   }
 
-  @Public()
-  @Post('pending/run')
-  @ApiOperation({ summary: 'Tarea programada: enviar los avisos pendientes por push o e-mail' })
-  runPending(@Headers('x-job-key') jobKey?: string) {
-    assertJobKey(jobKey);
-    return this.notifications.processPending();
+  @JobEndpoint()
+  @Post('jobs/run')
+  @ApiCreatedResponse({ type: RunNotificationJobsResponseDto })
+  @ApiOperation({ summary: 'Tarea programada: crear los recordatorios que ya corresponden' })
+  async runJobs() {
+    const { reminded } = await this.reminders.sendDue();
+    const { sent, failed } = await this.pushDispatcher.dispatchPending();
+    return { reminded, pushSent: sent, pushFailed: failed };
   }
 }

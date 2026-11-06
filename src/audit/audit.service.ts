@@ -6,7 +6,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditQueryDto } from './audit-query.dto';
 
 export interface AuditEntry {
-  // Vacío (null) cuando lo hace una tarea automática
   userId: string | null;
   action: string;
   entity: string;
@@ -18,7 +17,6 @@ export interface AuditEntry {
 export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Pasa "db" cuando estés dentro de una transacción, para que el registro se guarde junto con el cambio.
   async log(entry: AuditEntry, db?: Db): Promise<void> {
     const client = db ?? this.prisma;
     await client.auditLog.create({
@@ -51,11 +49,11 @@ export class AuditService {
       total,
       page: query.page,
       pageSize: query.pageSize,
-      // Id es BIGINT: se devuelve como texto porque JSON no admite BigInt.
+      // Id is a BIGINT, which JSON cannot represent.
       items: items.map((item) => ({
         ...item,
         id: item.id.toString(),
-        details: item.details ? JSON.parse(item.details) : null,
+        details: item.details ? (JSON.parse(item.details) as unknown) : null,
       })),
     };
   }

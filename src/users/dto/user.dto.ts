@@ -1,12 +1,10 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   ArrayNotEmpty,
   IsArray,
   IsBoolean,
-  IsEmail,
   IsIn,
-  IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
@@ -18,40 +16,16 @@ import { ROLES } from '../../common/constants';
 export class RoleAssignmentDto {
   @ApiProperty({ enum: [...ROLES] })
   @IsIn([...ROLES])
-  role: string;
+  role!: string;
 
-  /** Obligatorio para SPOC_EDIFICIO: id del edificio que administra */
+  @ApiPropertyOptional({ description: 'Required for SPOC_EDIFICIO: the building it manages' })
   @IsOptional()
   @IsUUID()
   buildingId?: string;
 }
 
-export class CreateUserDto {
-  /** Correo corporativo con el que entrará con Google */
-  @IsEmail()
-  email: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(200)
-  fullName: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(120)
-  department?: string;
-
-  /** Si no se envía, queda como ASOCIADO */
-  @IsOptional()
-  @IsArray()
-  @ArrayNotEmpty()
-  @ValidateNested({ each: true })
-  @Type(() => RoleAssignmentDto)
-  roles?: RoleAssignmentDto[];
-}
-
 export class UpdateUserDto {
-  /** false para desactivar: ya no podrá iniciar sesión */
+  @ApiPropertyOptional({ description: 'false deactivates the user, who can no longer sign in' })
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
@@ -61,7 +35,10 @@ export class UpdateUserDto {
   @MaxLength(120)
   department?: string;
 
-  /** Reemplaza todos los roles del usuario */
+  @ApiPropertyOptional({
+    description: 'Replaces every role of the user',
+    type: [RoleAssignmentDto],
+  })
   @IsOptional()
   @IsArray()
   @ArrayNotEmpty()
