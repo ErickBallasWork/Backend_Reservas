@@ -8,7 +8,9 @@ import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { PrismaService } from '../prisma/prisma.service';
+import { rethrowNameTaken } from './catalog-errors';
 import { CatalogLookupService } from './catalog-lookup.service';
+import { GUARDED_TRANSACTION, reservationsOfResource } from './catalog-scopes';
 import { CreateResourceDto, ListResourcesQueryDto, UpdateResourceDto } from './dto/resource.dto';
 
 @Injectable()
@@ -114,31 +116,41 @@ export class ResourcesService {
       buildingId = building.id;
     }
 
-    const resource = await this.prisma.resource.create({
-      data: {
-        type: dto.type,
-        buildingId,
-        parentResourceId,
-        name: dto.name.trim(),
-        capacity,
-        equipment: dto.equipment?.trim(),
-        rules: dto.rules?.trim(),
-        assetTag: dto.type === 'LAPTOP' ? dto.assetTag?.trim() : null,
-      },
-    });
-    await this.audit.log({
-      userId: actor.id,
-      action: 'RESOURCE_CREATED',
-      entity: 'Resource',
-      entityId: resource.id,
-      details: resource,
-    });
-    return resource;
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const resource = await tx.resource.create({
+          data: {
+            type: dto.type,
+            buildingId,
+            parentResourceId,
+            name: dto.name.trim(),
+            capacity,
+            equipment: dto.equipment?.trim(),
+            rules: dto.rules?.trim(),
+            assetTag: dto.type === 'LAPTOP' ? dto.assetTag?.trim() : null,
+          },
+        });
+        await this.audit.log(
+          {
+            userId: actor.id,
+            action: 'RESOURCE_CREATED',
+            entity: 'Resource',
+            entityId: resource.id,
+            details: resource,
+          },
+          tx,
+        );
+        return resource;
+      });
+    } catch (error) {
+      return rethrowNameTaken(error, 'resource');
+    }
   }
 
   async update(actor: CurrentUserData, id: string, dto: UpdateResourceDto) {
     const before = await this.get(id);
     const data: Prisma.ResourceUncheckedUpdateInput = {};
+    let movesLaptop = false;
 
     if (dto.parentResourceId !== undefined && dto.parentResourceId !== before.parentResourceId) {
       if (before.type !== 'LAPTOP') {
@@ -148,18 +160,12 @@ export class ResourcesService {
         });
       }
       const lab = await this.getLab(dto.parentResourceId);
-      await this.lookup.assertNoFutureReservations({ resourceId: id }, 'La laptop');
       data.parentResourceId = lab.id;
       data.buildingId = lab.buildingId;
+      movesLaptop = true;
     }
 
-    if (dto.isActive === false && before.isActive) {
-      const where: Prisma.ReservationWhereInput =
-        before.type === 'AI_LAB'
-          ? { OR: [{ resourceId: id }, { resource: { parentResourceId: id } }] }
-          : { resourceId: id };
-      await this.lookup.assertNoFutureReservations(where, 'El recurso');
-    }
+    const deactivates = dto.isActive === false && before.isActive;
 
     if (dto.name !== undefined) data.name = dto.name.trim();
     if (dto.capacity !== undefined && before.type !== 'LAPTOP') data.capacity = dto.capacity;
@@ -168,31 +174,43 @@ export class ResourcesService {
     if (dto.assetTag !== undefined && before.type === 'LAPTOP') data.assetTag = dto.assetTag.trim();
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
 
-    const after = await this.prisma.resource.update({ where: { id }, data });
-    await this.audit.log({
-      userId: actor.id,
-      action: 'RESOURCE_UPDATED',
-      entity: 'Resource',
-      entityId: id,
-      details: {
-        before: {
-          name: before.name,
-          capacity: before.capacity,
-          parentResourceId: before.parentResourceId,
-          isActive: before.isActive,
-        },
-        after,
-      },
-    });
-    return after;
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        if (movesLaptop || deactivates) {
+          await this.lookup.assertNoFutureReservations(
+            reservationsOfResource(before),
+            movesLaptop ? 'La laptop' : 'El recurso',
+            tx,
+          );
+        }
+        const after = await tx.resource.update({ where: { id }, data });
+        await this.audit.log(
+          {
+            userId: actor.id,
+            action: 'RESOURCE_UPDATED',
+            entity: 'Resource',
+            entityId: id,
+            details: {
+              before: {
+                name: before.name,
+                capacity: before.capacity,
+                parentResourceId: before.parentResourceId,
+                isActive: before.isActive,
+              },
+              after,
+            },
+          },
+          tx,
+        );
+        return after;
+      }, GUARDED_TRANSACTION);
+    } catch (error) {
+      return rethrowNameTaken(error, 'resource');
+    }
   }
 
   async futureReservations(id: string) {
     const resource = await this.get(id);
-    const where: Prisma.ReservationWhereInput =
-      resource.type === 'AI_LAB'
-        ? { OR: [{ resourceId: id }, { resource: { parentResourceId: id } }] }
-        : { resourceId: id };
-    return this.lookup.futureReservations(where);
+    return this.lookup.futureReservations(reservationsOfResource(resource));
   }
 }

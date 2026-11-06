@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { BLOCKING_STATUSES, ResourceType } from '../common/constants';
+import { Db } from '../common/db.types';
 import { PrismaService } from '../prisma/prisma.service';
 
 const TYPE_LABEL: Record<string, string> = {
@@ -53,8 +54,8 @@ export class CatalogLookupService {
     return laptops.map((l) => l.id);
   }
 
-  futureReservations(where: Prisma.ReservationWhereInput) {
-    return this.prisma.reservation.findMany({
+  futureReservations(where: Prisma.ReservationWhereInput, db: Db = this.prisma) {
+    return db.reservation.findMany({
       where: { ...where, status: { in: BLOCKING_STATUSES }, endDateTime: { gt: new Date() } },
       include: {
         user: { select: { id: true, fullName: true, email: true } },
@@ -64,8 +65,12 @@ export class CatalogLookupService {
     });
   }
 
-  async assertNoFutureReservations(where: Prisma.ReservationWhereInput, what: string) {
-    const count = await this.prisma.reservation.count({
+  async assertNoFutureReservations(
+    where: Prisma.ReservationWhereInput,
+    what: string,
+    db: Db = this.prisma,
+  ) {
+    const count = await db.reservation.count({
       where: { ...where, status: { in: BLOCKING_STATUSES }, endDateTime: { gt: new Date() } },
     });
     if (count > 0) {
