@@ -12,6 +12,7 @@ import { AuthService } from '../auth/auth.service';
 import { BuildingsController } from '../catalog/buildings.controller';
 import { BuildingsService } from '../catalog/buildings.service';
 import { CatalogController } from '../catalog/catalog.controller';
+import { CatalogTreeService } from '../catalog/catalog-tree.service';
 import { ResourcesController } from '../catalog/resources.controller';
 import { ResourcesService } from '../catalog/resources.service';
 import { AppConfigService } from '../config/app-config.service';
@@ -84,6 +85,7 @@ describe('OpenAPI contract', () => {
         { provide: AppConfigService, useValue: {} },
         { provide: BuildingsService, useValue: {} },
         { provide: ResourcesService, useValue: {} },
+        { provide: CatalogTreeService, useValue: {} },
         { provide: PrismaService, useValue: {} },
       ],
     }).compile();
