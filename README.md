@@ -112,6 +112,16 @@ nueva de `prisma/migrations`. Las migraciones ya aplicadas no se editan.
 
 - Límites de peticiones por IP: 120 por minuto en general y más estrictos en los endpoints públicos de acceso (por ejemplo, 5 solicitudes de acceso por hora). Los contadores viven en memoria de cada instancia. Detrás de App Service pon `TRUST_PROXY_HOPS=1`.
 
+### Primer SUPERADMIN
+
+El seed crea al SUPERADMIN (`INITIAL_SUPERADMIN_EMAIL`), pero ningún navegador suyo está aprobado todavía. Para entrar la primera vez:
+
+1. Abre `/request-access` desde ese navegador y pide acceso con el correo del SUPERADMIN.
+2. Con acceso a la base, ejecuta `npm run access:approve -- <correo>`. Solo aprueba solicitudes pendientes de usuarios que ya son SUPERADMIN, y deja el registro en la auditoría.
+3. La pantalla `/login` de ese navegador entra sola.
+
+Los demás dispositivos y usuarios se aprueban desde la bandeja de solicitudes.
+
 ## Docker y despliegue
 
 ```bash

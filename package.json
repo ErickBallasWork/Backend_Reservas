@@ -24,6 +24,7 @@
     "db:reset": "prisma migrate reset",
     "db:seed": "prisma db seed",
     "db:seed:demo": "ts-node prisma/seed-demo.ts",
+    "access:approve": "ts-node prisma/approve-access.ts",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
     "prepare": "husky"

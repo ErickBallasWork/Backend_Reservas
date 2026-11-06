@@ -10,7 +10,7 @@ export interface SeedEnvironment {
   initialSuperadmin: InitialSuperadmin | null;
 }
 
-function loadEnvFileIfPresent(): void {
+export function loadEnvFileIfPresent(): void {
   try {
     process.loadEnvFile();
   } catch {
