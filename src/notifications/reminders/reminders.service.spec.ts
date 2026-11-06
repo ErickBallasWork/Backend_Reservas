@@ -77,6 +77,7 @@ describe('RemindersService.sendDue', () => {
     });
     expect(notice.message).toContain('Sala Board');
     expect(notice.message).toContain('15 min');
+    expect(notice.message).not.toContain('..');
   });
 
   it('claims the reminder with a guard so two instances never send it twice', async () => {
