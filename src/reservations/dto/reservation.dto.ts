@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsDateString,
   IsIn,
@@ -12,15 +12,17 @@ import { CHECK_IN_METHODS, PURPOSES, RESERVATION_STATUSES } from '../../common/c
 import { PaginationQueryDto } from '../../common/pagination.dto';
 
 export class CreateReservationDto {
-  /**
-   * Id del recurso: una sala (reserva de sala), un laboratorio (reserva del laboratorio completo)
-   * o una laptop (reserva de laptop individual). El tipo de reserva se deduce del recurso.
-   */
+  @ApiProperty({
+    description:
+      'A room, an AI lab (books the whole lab) or a laptop. The reservation type is derived from it',
+  })
   @IsUUID()
   resourceId!: string;
 
-  /** Inicio en ISO 8601 con zona, por ejemplo 2026-11-12T15:00:00Z (10:00 en Ecuador) */
-  @ApiProperty({ example: '2026-11-12T15:00:00Z' })
+  @ApiProperty({
+    description: 'Start in ISO 8601 with time zone',
+    example: '2026-11-12T15:00:00Z',
+  })
   @IsDateString()
   startDateTime!: string;
 
@@ -28,13 +30,11 @@ export class CreateReservationDto {
   @IsDateString()
   endDateTime!: string;
 
-  /** Motivo (RF-07) */
   @ApiProperty({ enum: [...PURPOSES], example: 'INTERNAL_MEETING' })
   @IsIn([...PURPOSES])
   purpose!: string;
 
-  /** Detalle o justificación del motivo (RF-07) */
-  @ApiProperty({ example: 'Planificación del sprint 3' })
+  @ApiProperty({ description: 'Detail of the purpose', example: 'Planificación del sprint 3' })
   @IsString()
   @IsNotEmpty()
   @MaxLength(1000)
@@ -42,25 +42,28 @@ export class CreateReservationDto {
 }
 
 export class CheckInDto {
-  /** Cómo registró el uso: botón en la app o código QR en la sala */
-  @ApiProperty({ enum: [...CHECK_IN_METHODS], required: false, default: 'BUTTON' })
+  @ApiPropertyOptional({
+    description: 'Button in the app or QR code in the room',
+    enum: [...CHECK_IN_METHODS],
+    default: 'BUTTON',
+  })
   @IsOptional()
   @IsIn([...CHECK_IN_METHODS])
   method?: string;
 }
 
 export class MyReservationsQueryDto extends PaginationQueryDto {
-  @ApiProperty({ enum: [...RESERVATION_STATUSES], required: false })
+  @ApiPropertyOptional({ enum: [...RESERVATION_STATUSES] })
   @IsOptional()
   @IsIn([...RESERVATION_STATUSES])
   status?: string;
 
-  /** Desde (ISO 8601) */
+  @ApiPropertyOptional({ description: 'Range start (ISO 8601)' })
   @IsOptional()
   @IsDateString()
   from?: string;
 
-  /** Hasta (ISO 8601) */
+  @ApiPropertyOptional({ description: 'Range end (ISO 8601)' })
   @IsOptional()
   @IsDateString()
   to?: string;

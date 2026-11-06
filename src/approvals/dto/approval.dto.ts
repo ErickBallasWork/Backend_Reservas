@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class DecideApprovalDto {
@@ -6,7 +6,7 @@ export class DecideApprovalDto {
   @IsIn(['APPROVE', 'REJECT'])
   decision!: string;
 
-  /** Obligatorio al rechazar (HU-15) */
+  @ApiPropertyOptional({ description: 'Required when rejecting' })
   @IsOptional()
   @IsString()
   @MaxLength(1000)

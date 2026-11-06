@@ -1,15 +1,13 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsDateString, IsIn, IsInt, IsOptional, IsUUID, Min } from 'class-validator';
 
 export class RangeQueryDto {
-  /** Desde (ISO 8601), por ejemplo 2026-11-12T13:00:00Z */
-  @ApiProperty({ example: '2026-11-12T13:00:00Z' })
+  @ApiProperty({ description: 'Range start (ISO 8601)', example: '2026-11-12T13:00:00Z' })
   @IsDateString()
   from!: string;
 
-  /** Hasta (ISO 8601) */
-  @ApiProperty({ example: '2026-11-12T23:00:00Z' })
+  @ApiProperty({ description: 'Range end (ISO 8601)', example: '2026-11-12T23:00:00Z' })
   @IsDateString()
   to!: string;
 }
@@ -19,13 +17,15 @@ export class SearchAvailabilityQueryDto extends RangeQueryDto {
   @IsUUID()
   buildingId?: string;
 
-  /** Salas o laboratorios */
-  @ApiProperty({ enum: ['MEETING_ROOM', 'AI_LAB'], required: false })
+  @ApiPropertyOptional({
+    description: 'Meeting rooms or AI labs',
+    enum: ['MEETING_ROOM', 'AI_LAB'],
+  })
   @IsOptional()
   @IsIn(['MEETING_ROOM', 'AI_LAB'])
   type?: string;
 
-  /** Capacidad mínima */
+  @ApiPropertyOptional({ description: 'Minimum capacity' })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
