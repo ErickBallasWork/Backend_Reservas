@@ -2,7 +2,13 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from 
 import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../common/current-user/current-user.decorator';
 import { CurrentUserData } from '../common/current-user/current-user.types';
-import { CheckInDto, CreateReservationDto, MyReservationsQueryDto } from './dto/reservation.dto';
+import {
+  CheckInDto,
+  CreateReservationDto,
+  MyReservationsQueryDto,
+  UpdateReservationDto,
+} from './dto/reservation.dto';
+import { ReservationEditService } from './reservation-edit.service';
 import {
   ReservationDetailResponseDto,
   ReservationPageResponseDto,
@@ -12,7 +18,10 @@ import { ReservationsService } from './reservations.service';
 @ApiTags('Reservas')
 @Controller('reservations')
 export class ReservationsController {
-  constructor(private readonly reservations: ReservationsService) {}
+  constructor(
+    private readonly reservations: ReservationsService,
+    private readonly edits: ReservationEditService,
+  ) {}
 
   @Post()
   @ApiCreatedResponse({ type: ReservationDetailResponseDto })
@@ -42,6 +51,23 @@ export class ReservationsController {
   })
   get(@CurrentUser() user: CurrentUserData, @Param('id', ParseUUIDPipe) id: string) {
     return this.reservations.getForViewer(user, id);
+  }
+
+  @Patch(':id')
+  @ApiOkResponse({ type: ReservationDetailResponseDto })
+  @ApiOperation({
+    summary: 'Modificar o reprogramar mi reserva (RF-14)',
+    description:
+      'Cambia la franja, el recurso, el motivo, el detalle o los asistentes con las mismas reglas que crear. ' +
+      'Mover la franja o el recurso exige 24 h de anticipación sobre la reserva original y sobre la nueva. ' +
+      'Un entrenamiento aprobado vuelve a pendiente si cambia la franja o el recurso.',
+  })
+  update(
+    @CurrentUser() user: CurrentUserData,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateReservationDto,
+  ) {
+    return this.edits.update(user, id, dto);
   }
 
   @Patch(':id/cancel')

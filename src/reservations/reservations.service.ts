@@ -244,7 +244,7 @@ export class ReservationsService {
     return { total, page: query.page, pageSize: query.pageSize, items };
   }
 
-  private async getOwned(userId: string, id: string) {
+  async getOwned(userId: string, id: string) {
     const reservation = await this.prisma.reservation.findUnique({ where: { id } });
     if (!reservation) {
       throw new NotFoundException({

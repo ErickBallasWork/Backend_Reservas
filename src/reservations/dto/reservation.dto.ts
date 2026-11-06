@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsDateString,
@@ -56,6 +56,8 @@ export class CreateReservationDto {
   @Max(10_000)
   attendees?: number;
 }
+
+export class UpdateReservationDto extends PartialType(CreateReservationDto) {}
 
 export class CheckInDto {
   @ApiPropertyOptional({
