@@ -21,7 +21,11 @@ export const RESERVATION_TYPE_BY_RESOURCE: Record<ResourceType, string> = {
   LAPTOP: 'LAPTOP',
 };
 
+export const RESERVATION_TYPES = ['ROOM', 'FULL_LAB', 'LAPTOP'] as const;
+export type ReservationType = (typeof RESERVATION_TYPES)[number];
+
 export const PURPOSES = ['INTERNAL_MEETING', 'CLIENT_MEETING', 'TRAINING'] as const;
+export type Purpose = (typeof PURPOSES)[number];
 
 export const RESERVATION_STATUSES = [
   'PENDING_APPROVAL',
@@ -31,6 +35,8 @@ export const RESERVATION_STATUSES = [
   'CHECKED_IN',
   'NO_SHOW',
 ] as const;
+
+export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
 
 export const Status = {
   PENDING_APPROVAL: 'PENDING_APPROVAL',

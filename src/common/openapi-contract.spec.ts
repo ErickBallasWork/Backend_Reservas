@@ -5,6 +5,8 @@ import { Test } from '@nestjs/testing';
 import { DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
 import { AccessRequestsController } from '../access-requests/access-requests.controller';
 import { AccessRequestsService } from '../access-requests/access-requests.service';
+import { AvailabilityController } from '../availability/availability.controller';
+import { AvailabilityService } from '../availability/availability.service';
 import { AuthController } from '../auth/auth.controller';
 import { DevicesController } from '../auth/devices.controller';
 import { DevicesService } from '../auth/devices.service';
@@ -16,11 +18,14 @@ import { CatalogTreeService } from '../catalog/catalog-tree.service';
 import { ResourcesController } from '../catalog/resources.controller';
 import { ResourcesService } from '../catalog/resources.service';
 import { AppConfigService } from '../config/app-config.service';
+import { ReservationsController } from '../reservations/reservations.controller';
+import { ReservationsService } from '../reservations/reservations.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ManagedAssociatesController } from '../users/managed-associates.controller';
 import { ManagedAssociatesService } from '../users/managed-associates.service';
 import { UsersController } from '../users/users.controller';
 import { UsersService } from '../users/users.service';
+import { RESERVATION_STATUSES } from './constants';
 import { ERROR_CODES } from './error-codes';
 
 type Operation = { responses: Record<string, { content?: Record<string, unknown> }> };
@@ -52,6 +57,13 @@ const DOCUMENTED_OPERATIONS: [string, string][] = [
   ['get', '/access-requests'],
   ['post', '/access-requests/{id}/approve'],
   ['post', '/access-requests/{id}/reject'],
+  ['get', '/availability/search'],
+  ['get', '/availability/resources/{id}'],
+  ['post', '/reservations'],
+  ['get', '/reservations/mine'],
+  ['get', '/reservations/{id}'],
+  ['patch', '/reservations/{id}/cancel'],
+  ['post', '/reservations/{id}/check-in'],
 ];
 
 function sourceFiles(dir: string): string[] {
@@ -77,6 +89,8 @@ describe('OpenAPI contract', () => {
         BuildingsController,
         CatalogController,
         ResourcesController,
+        AvailabilityController,
+        ReservationsController,
       ],
       providers: [
         { provide: AuthService, useValue: {} },
@@ -88,6 +102,8 @@ describe('OpenAPI contract', () => {
         { provide: BuildingsService, useValue: {} },
         { provide: ResourcesService, useValue: {} },
         { provide: CatalogTreeService, useValue: {} },
+        { provide: AvailabilityService, useValue: {} },
+        { provide: ReservationsService, useValue: {} },
         { provide: PrismaService, useValue: {} },
       ],
     }).compile();
@@ -123,6 +139,8 @@ describe('OpenAPI contract', () => {
     expect(serialize('ResourceResponseDto')).toContain('#/components/schemas/ResourceType');
     expect(serialize('CurrentUserResponseDto')).toContain('#/components/schemas/Role');
     expect(serialize('ApiErrorResponseDto')).toContain('#/components/schemas/ErrorCode');
+    expect(serialize('ReservationResponseDto')).toContain('#/components/schemas/ReservationStatus');
+    expect(schemas.ReservationStatus).toMatchObject({ enum: [...RESERVATION_STATUSES] });
     expect(schemas.ResourceType).toMatchObject({ enum: ['MEETING_ROOM', 'AI_LAB', 'LAPTOP'] });
   });
 });
