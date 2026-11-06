@@ -10,8 +10,8 @@ import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { IS_PUBLIC_KEY } from '../common/current-user/public.decorator';
+import { AppConfigService } from '../config/app-config.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { authMode } from './auth-config';
 import { JwtPayload } from './auth.service';
 import { toCurrentUser, USER_WITH_ROLES } from './current-user.mapper';
 import { ROLES_KEY } from './roles.decorator';
@@ -28,6 +28,7 @@ export class AuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
+    private readonly appConfig: AppConfigService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -66,9 +67,10 @@ export class AuthGuard implements CanActivate {
       return this.loadUser({ id: payload.sub });
     }
 
-    if (authMode() === 'demo') {
+    const { mode, demoDefaultUser } = this.appConfig.auth;
+    if (mode === 'demo') {
       const demo = request.headers['x-demo-user'];
-      const email = (Array.isArray(demo) ? demo[0] : demo) || process.env.DEFAULT_DEMO_USER;
+      const email = (Array.isArray(demo) ? demo[0] : demo) || demoDefaultUser;
       if (email) return this.loadUser({ email: email.trim().toLowerCase() });
     }
 

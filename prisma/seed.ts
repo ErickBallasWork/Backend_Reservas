@@ -1,29 +1,24 @@
 // Datos iniciales OBLIGATORIOS (también en producción): roles y Administrador inicial.
 // El catálogo (edificio, laboratorios, laptops, salas) lo registra el Administrador desde la app.
 import { PrismaClient } from '@prisma/client';
+import { ROLES } from '../src/common/constants';
+import { readSeedEnvironment } from './seed-environment';
 
-try {
-  process.loadEnvFile();
-} catch {
-  // sin .env (en Azure las variables vienen del entorno)
-}
-
+const { initialAdmin } = readSeedEnvironment();
 const prisma = new PrismaClient();
-const ROLES = ['ASOCIADO', 'ADMIN', 'SPOC_ADMIN', 'LIDER', 'SPOC_EDIFICIO'];
 
 async function main() {
   for (const name of ROLES) {
     await prisma.role.upsert({ where: { name }, update: {}, create: { name } });
   }
 
-  const email = process.env.INITIAL_ADMIN_EMAIL?.trim().toLowerCase();
-  if (!email) {
+  if (!initialAdmin) {
     console.warn(
       'Roles listos. Falta INITIAL_ADMIN_EMAIL en el .env: no se creó el Administrador.',
     );
     return;
   }
-  const fullName = process.env.INITIAL_ADMIN_NAME?.trim() || email;
+  const { email, fullName } = initialAdmin;
 
   const admin = await prisma.user.upsert({
     where: { email },

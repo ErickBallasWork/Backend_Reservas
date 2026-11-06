@@ -2,8 +2,8 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { JwtService } from '@nestjs/jwt';
 import { AuditService } from '../audit/audit.service';
 import { CurrentUserData } from '../common/current-user/current-user.types';
+import { AppConfigService } from '../config/app-config.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { authMode, autoCreateUsers, jwtExpiresInSeconds } from './auth-config';
 import { toCurrentUser, USER_WITH_ROLES } from './current-user.mapper';
 import { GoogleProfile, GoogleVerifierService } from './google-verifier.service';
 
@@ -19,6 +19,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly google: GoogleVerifierService,
     private readonly audit: AuditService,
+    private readonly appConfig: AppConfigService,
   ) {}
 
   /** Inicio de sesión con Google: verifica el token de Google y entrega el token propio de la API. */
@@ -32,7 +33,7 @@ export class AuthService {
 
   /** Solo en AUTH_MODE=demo: inicia sesión como un usuario demo sin Google. */
   async loginDemo(email: string) {
-    if (authMode() !== 'demo') {
+    if (this.appConfig.auth.mode !== 'demo') {
       throw new NotFoundException({ code: 'NOT_FOUND', message: 'No disponible' });
     }
     const user = await this.prisma.user.findUnique({
@@ -67,7 +68,7 @@ export class AuthService {
       return toCurrentUser(updated);
     }
 
-    if (!autoCreateUsers()) {
+    if (!this.appConfig.auth.autoCreateUsers) {
       throw new ForbiddenException({
         code: 'USER_NOT_REGISTERED',
         message: 'Tu usuario no está habilitado en el sistema. Pide acceso a un administrador.',
@@ -100,7 +101,7 @@ export class AuthService {
     return {
       accessToken,
       tokenType: 'Bearer',
-      expiresIn: jwtExpiresInSeconds(),
+      expiresIn: this.appConfig.auth.jwtExpiresInSeconds,
       user,
     };
   }

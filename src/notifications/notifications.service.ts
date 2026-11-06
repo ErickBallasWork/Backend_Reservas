@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Db } from '../common/db.types';
 import { toSkipTake } from '../common/pagination.dto';
+import { AppConfigService } from '../config/app-config.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsQueryDto } from './notifications-query.dto';
 
@@ -15,16 +16,6 @@ export interface NotifyInput {
 // Un canal extra (push o e-mail). Hoy solo escriben en la consola (simulado) para desarrollo.
 interface ChannelSender {
   send(input: { email: string; title: string; message: string }): Promise<void>;
-}
-
-const EXTRA_CHANNELS = ['PUSH', 'EMAIL'] as const;
-
-// Canales extra activos según el .env, por ejemplo NOTIFY_CHANNELS=EMAIL
-function enabledExtraChannels(): string[] {
-  return (process.env.NOTIFY_CHANNELS ?? '')
-    .split(',')
-    .map((c) => c.trim().toUpperCase())
-    .filter((c) => (EXTRA_CHANNELS as readonly string[]).includes(c));
 }
 
 @Injectable()
@@ -45,7 +36,10 @@ export class NotificationsService {
     },
   };
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly appConfig: AppConfigService,
+  ) {}
 
   /**
    * Crea el aviso en la bandeja del sistema (canal IN_APP, entregado al instante) y, por cada canal
@@ -57,7 +51,11 @@ export class NotificationsService {
     await client.notification.createMany({
       data: [
         { ...input, channel: 'IN_APP', status: 'SENT', sentAt: now },
-        ...enabledExtraChannels().map((channel) => ({ ...input, channel, status: 'PENDING' })),
+        ...this.appConfig.notifications.extraChannels.map((channel) => ({
+          ...input,
+          channel,
+          status: 'PENDING',
+        })),
       ],
     });
   }

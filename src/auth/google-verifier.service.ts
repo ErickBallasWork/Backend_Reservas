@@ -5,7 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { OAuth2Client } from 'google-auth-library';
-import { allowedEmailDomains, requireGoogleWorkspace } from './auth-config';
+import { AppConfigService } from '../config/app-config.service';
 
 export interface GoogleProfile {
   email: string;
@@ -24,8 +24,14 @@ export interface GoogleProfile {
 export class GoogleVerifierService {
   private readonly client = new OAuth2Client();
 
+  constructor(private readonly appConfig: AppConfigService) {}
+
   async verify(credential: string): Promise<GoogleProfile> {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const {
+      googleClientId: clientId,
+      allowedEmailDomains,
+      requireGoogleWorkspace,
+    } = this.appConfig.auth;
     if (!clientId) {
       throw new ServiceUnavailableException({
         code: 'GOOGLE_NOT_CONFIGURED',
@@ -49,16 +55,15 @@ export class GoogleVerifierService {
 
     const email = payload.email.toLowerCase();
     const domain = email.split('@')[1] ?? '';
-    const allowed = allowedEmailDomains();
-    if (!allowed.includes(domain)) {
+    if (!allowedEmailDomains.includes(domain)) {
       throw new ForbiddenException({
         code: 'DOMAIN_NOT_ALLOWED',
-        message: `Solo se permiten correos de: ${allowed.join(', ')}`,
+        message: `Solo se permiten correos de: ${allowedEmailDomains.join(', ')}`,
       });
     }
 
     const hostedDomain = payload.hd ? payload.hd.toLowerCase() : null;
-    if (requireGoogleWorkspace() && hostedDomain !== domain) {
+    if (requireGoogleWorkspace && hostedDomain !== domain) {
       throw new ForbiddenException({
         code: 'NOT_CORPORATE_ACCOUNT',
         message: 'Debes entrar con la cuenta corporativa de Google Workspace de tu empresa',

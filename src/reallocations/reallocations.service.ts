@@ -12,6 +12,7 @@ import { Status } from '../common/constants';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { isUniqueViolation } from '../common/db.types';
 import { formatDate } from '../common/format';
+import { AppConfigService } from '../config/app-config.service';
 import { reservationRules } from '../config/reservation-rules';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -28,6 +29,7 @@ export class ReallocationsService {
     private readonly reservations: ReservationsService,
     private readonly notifications: NotificationsService,
     private readonly audit: AuditService,
+    private readonly appConfig: AppConfigService,
   ) {}
 
   /**
@@ -92,6 +94,7 @@ export class ReallocationsService {
     }
 
     const justification = dto.justification.trim();
+    const { timeZone } = this.appConfig.server;
     try {
       await this.prisma.$transaction(
         async (tx) => {
@@ -125,7 +128,7 @@ export class ReallocationsService {
               userId: reservation.userId,
               type: 'RESERVATION_REALLOCATED',
               title: 'Tu reserva fue reasignada',
-              message: `Tu reserva de ${reservation.resource.name} se movió a ${room.name} (del ${formatDate(start)} al ${formatDate(end)}). Motivo: ${justification}`,
+              message: `Tu reserva de ${reservation.resource.name} se movió a ${room.name} (del ${formatDate(start, timeZone)} al ${formatDate(end, timeZone)}). Motivo: ${justification}`,
             },
             tx,
           );

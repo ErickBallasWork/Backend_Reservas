@@ -1,22 +1,24 @@
 import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Public } from '../common/current-user/public.decorator';
-import { authMode } from './auth-config';
+import { AppConfigService } from '../config/app-config.service';
 import { AuthService } from './auth.service';
 import { DemoLoginDto, GoogleLoginDto } from './dto/auth.dto';
 
 @ApiTags('Autenticación')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly appConfig: AppConfigService,
+  ) {}
 
-  // El Client ID de Google no es secreto (va en el HTML de cualquier página con el botón).
-  // Se entrega desde aquí para que el frontend y tools/login-google.html no lo tengan escrito.
   @Public()
   @Get('config')
   @ApiOperation({ summary: 'Datos públicos para mostrar el botón de Google (Client ID y modo)' })
   config() {
-    return { authMode: authMode(), googleClientId: process.env.GOOGLE_CLIENT_ID || null };
+    const { mode, googleClientId } = this.appConfig.auth;
+    return { authMode: mode, googleClientId };
   }
 
   @Public()

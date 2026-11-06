@@ -2,14 +2,14 @@
 //   npm run db:seed
 // No borra reservas ni datos creados por ti: solo crea lo que falte y rehace los roles de los usuarios demo.
 import { PrismaClient } from '@prisma/client';
+import { ROLES } from '../src/common/constants';
+import { readSeedEnvironment } from './seed-environment';
 
-if (process.env.NODE_ENV === 'production') {
+if (readSeedEnvironment().isProduction) {
   throw new Error('El seed demo no se ejecuta en producción. Usa "npm run db:seed".');
 }
 
 const prisma = new PrismaClient();
-
-const ROLES = ['ASOCIADO', 'ADMIN', 'SPOC_ADMIN', 'LIDER', 'SPOC_EDIFICIO'];
 
 async function upsertResource(data: {
   buildingId: string;

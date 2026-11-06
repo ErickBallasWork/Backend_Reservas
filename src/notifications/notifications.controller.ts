@@ -1,9 +1,8 @@
-import { Controller, Get, Headers, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../common/current-user/current-user.decorator';
 import { CurrentUserData } from '../common/current-user/current-user.types';
-import { Public } from '../common/current-user/public.decorator';
-import { assertJobKey } from '../common/job-key';
+import { JobEndpoint } from '../common/guards/job-endpoint.decorator';
 import { NotificationsQueryDto } from './notifications-query.dto';
 import { NotificationsService } from './notifications.service';
 
@@ -36,11 +35,10 @@ export class NotificationsController {
     return this.notifications.markRead(user.id, id);
   }
 
-  @Public()
+  @JobEndpoint()
   @Post('pending/run')
   @ApiOperation({ summary: 'Tarea programada: enviar los avisos pendientes por push o e-mail' })
-  runPending(@Headers('x-job-key') jobKey?: string) {
-    assertJobKey(jobKey);
+  runPending() {
     return this.notifications.processPending();
   }
 }
