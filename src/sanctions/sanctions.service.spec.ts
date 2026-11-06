@@ -3,6 +3,7 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { type AuditEntry, type AuditService } from '../audit/audit.service';
 import { type CurrentUserData } from '../common/current-user/current-user.types';
+import { type AppConfigService } from '../config/app-config.service';
 import { DEFAULT_RESERVATION_RULES } from '../config/reservation-rules.service';
 import {
   type NotificationsService,
@@ -77,6 +78,7 @@ function build(options: { found?: unknown; updatedCount?: number } = {}) {
     notifications as unknown as NotificationsService,
     audit as unknown as AuditService,
     rules,
+    {} as AppConfigService,
   );
   return { service, tx, prisma, notifications, audit };
 }

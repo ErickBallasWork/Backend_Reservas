@@ -51,6 +51,7 @@ mensaje lista cada problema.
 | `DEMO_LOGIN_ENABLED`       | no          | `false`              | no      | `true` habilita `POST /auth/demo` (solo desarrollo). La API no arranca así en producción         |
 | `NOTIFY_CHANNELS`          | no          | vacío                | no      | Canales extra a la bandeja: `PUSH`, `EMAIL` o ambos                                              |
 | `JOB_KEY`                  | no          | —                    | **sí**  | Si se define (mínimo 32), las tareas programadas exigen la cabecera `x-job-key`                  |
+| `NO_SHOW_ENFORCED_FROM`    | no          | —                    | no      | Fecha ISO 8601. El job de inasistencia ignora las reservas que empezaron antes                   |
 | `INITIAL_SUPERADMIN_EMAIL` | solo seed   | —                    | no      | SUPERADMIN que crea `npm run db:seed`                                                            |
 | `INITIAL_SUPERADMIN_NAME`  | solo seed   | el correo            | no      | Nombre del SUPERADMIN inicial                                                                    |
 

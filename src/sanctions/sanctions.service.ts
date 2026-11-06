@@ -9,6 +9,7 @@ import { AuditService } from '../audit/audit.service';
 import { Status } from '../common/constants';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { toSkipTake } from '../common/pagination.dto';
+import { AppConfigService } from '../config/app-config.service';
 import { ReservationRulesService } from '../config/reservation-rules.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -49,6 +50,7 @@ export class SanctionsService {
     private readonly notifications: NotificationsService,
     private readonly audit: AuditService,
     private readonly reservationRules: ReservationRulesService,
+    private readonly config: AppConfigService,
   ) {}
 
   async assertNoActiveSanction(userId: string): Promise<void> {
@@ -67,9 +69,14 @@ export class SanctionsService {
     const rules = this.reservationRules.current();
     const deadline = new Date(now.getTime() - rules.checkinAfterMin * 60_000);
     const byUser: Prisma.ReservationWhereInput = filter.userId ? { userId: filter.userId } : {};
+    const { noShowEnforcedFrom } = this.config.jobs;
 
     const overdue = await this.prisma.reservation.findMany({
-      where: { ...byUser, status: Status.CONFIRMED, startDateTime: { lt: deadline } },
+      where: {
+        ...byUser,
+        status: Status.CONFIRMED,
+        startDateTime: { lt: deadline, ...(noShowEnforcedFrom ? { gte: noShowEnforcedFrom } : {}) },
+      },
       select: { id: true, userId: true, resource: { select: { name: true } } },
       orderBy: { startDateTime: 'asc' },
       take: 200,

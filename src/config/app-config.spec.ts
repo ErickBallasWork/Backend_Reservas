@@ -37,6 +37,7 @@ describe('loadAppConfig', () => {
     expect(config.auth.demoLoginEnabled).toBe(false);
     expect(config.notifications.extraChannels).toEqual([]);
     expect(config.jobs.jobKey).toBeNull();
+    expect(config.jobs.noShowEnforcedFrom).toBeNull();
   });
 
   it('treats empty values as missing', () => {
@@ -45,6 +46,18 @@ describe('loadAppConfig', () => {
     expect(config.auth.demoLoginEnabled).toBe(false);
     expect(config.jobs.jobKey).toBeNull();
     expect(config.server.port).toBe(3001);
+  });
+
+  it('parses the no-show enforcement date', () => {
+    const config = loadAppConfig(baseEnv({ NO_SHOW_ENFORCED_FROM: '2026-11-15T00:00:00Z' }));
+
+    expect(config.jobs.noShowEnforcedFrom).toEqual(new Date('2026-11-15T00:00:00Z'));
+  });
+
+  it('rejects an invalid no-show enforcement date', () => {
+    expect(() => loadAppConfig(baseEnv({ NO_SHOW_ENFORCED_FROM: 'tomorrow' }))).toThrow(
+      'NO_SHOW_ENFORCED_FROM',
+    );
   });
 
   it('parses comma separated lists', () => {

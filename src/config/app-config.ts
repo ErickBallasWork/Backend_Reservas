@@ -29,6 +29,7 @@ export interface NotificationsConfig {
 
 export interface JobsConfig {
   jobKey: string | null;
+  noShowEnforcedFrom: Date | null;
 }
 
 export interface AppConfig {
@@ -60,7 +61,10 @@ export function toAppConfig(env: EnvironmentVariables): AppConfig {
       demoLoginEnabled: env.DEMO_LOGIN_ENABLED,
     },
     notifications: { extraChannels: env.NOTIFY_CHANNELS },
-    jobs: { jobKey: env.JOB_KEY ?? null },
+    jobs: {
+      jobKey: env.JOB_KEY ?? null,
+      noShowEnforcedFrom: env.NO_SHOW_ENFORCED_FROM ? new Date(env.NO_SHOW_ENFORCED_FROM) : null,
+    },
   };
 }
 

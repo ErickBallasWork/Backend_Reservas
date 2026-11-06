@@ -6,6 +6,7 @@ import {
   IsFQDN,
   IsIn,
   IsInt,
+  IsISO8601,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -108,6 +109,10 @@ export class EnvironmentVariables {
   @IsString()
   @MinLength(MIN_SECRET_LENGTH)
   JOB_KEY?: string;
+
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  NO_SHOW_ENFORCED_FROM?: string;
 }
 
 function withoutEmptyValues(raw: Record<string, unknown>): Record<string, unknown> {
