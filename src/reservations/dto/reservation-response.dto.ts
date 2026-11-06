@@ -120,6 +120,14 @@ export class ReservationReallocationDto {
   reallocationDate!: Date;
 }
 
+export class ReservationSeriesRefDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ description: 'Reservations of the series' })
+  occurrenceCount!: number;
+}
+
 export class ReservationResponseDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;
@@ -141,6 +149,12 @@ export class ReservationResponseDto {
 
   @ApiProperty({ type: Number, nullable: true })
   attendees!: number | null;
+
+  @ApiProperty({ type: Number, nullable: true, description: 'Position inside its series' })
+  occurrenceIndex!: number | null;
+
+  @ApiProperty({ type: ReservationSeriesRefDto, nullable: true })
+  series!: ReservationSeriesRefDto | null;
 
   @ApiProperty({ format: 'date-time' })
   startDateTime!: Date;

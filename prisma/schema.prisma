@@ -57,15 +57,16 @@ model Resource {
   isActive         Boolean  @default(true) @map("IsActive")
   createdAt        DateTime @default(now()) @map("CreatedAt")
 
-  building          Building          @relation(fields: [buildingId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  parent            Resource?         @relation("LabLaptops", fields: [parentResourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  children          Resource[]        @relation("LabLaptops")
+  building          Building            @relation(fields: [buildingId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  parent            Resource?           @relation("LabLaptops", fields: [parentResourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children          Resource[]          @relation("LabLaptops")
   reservations      Reservation[]
   slots             ReservationSlot[]
-  reallocationsFrom Reallocation[]    @relation("ReallocationPrevious")
-  reallocationsTo   Reallocation[]    @relation("ReallocationNew")
+  reallocationsFrom Reallocation[]      @relation("ReallocationPrevious")
+  reallocationsTo   Reallocation[]      @relation("ReallocationNew")
   operatingHours    OperatingHours[]
   closedDates       ClosedDate[]
+  series            ReservationSeries[]
 
   @@unique([buildingId, name])
   @@index([type])
@@ -112,18 +113,19 @@ model User {
 
   roles              UserRole[]
   reservations       Reservation[]
+  reservationSeries  ReservationSeries[]
   approvals          Approval[]
   reallocations      Reallocation[]
-  sanctions          Sanction[]         @relation("SanctionUser")
-  sanctionsResolved  Sanction[]         @relation("SanctionResolver")
+  sanctions          Sanction[]          @relation("SanctionUser")
+  sanctionsResolved  Sanction[]          @relation("SanctionResolver")
   notifications      Notification[]
   auditLogs          AuditLog[]
   checkIns           CheckIn[]
-  accessDecisions    AccessRequest[]    @relation("AccessRequestDecider")
+  accessDecisions    AccessRequest[]     @relation("AccessRequestDecider")
   devices            Device[]
-  managedAssociates  ManagedAssociate[] @relation("ManagerAssociates")
-  managers           ManagedAssociate[] @relation("AssociateManagers")
-  assignedAssociates ManagedAssociate[] @relation("ManagedAssociateCreator")
+  managedAssociates  ManagedAssociate[]  @relation("ManagerAssociates")
+  managers           ManagedAssociate[]  @relation("AssociateManagers")
+  assignedAssociates ManagedAssociate[]  @relation("ManagedAssociateCreator")
 
   @@map("USERS")
 }
@@ -227,6 +229,8 @@ model Reservation {
   // Detalle o justificación del motivo (RF-07)
   justification   String   @map("Justification") @db.NVarChar(1000)
   attendees       Int?     @map("Attendees")
+  seriesId        String?  @map("SeriesId") @db.UniqueIdentifier
+  occurrenceIndex Int?     @map("OccurrenceIndex")
   startDateTime   DateTime @map("StartDateTime")
   endDateTime     DateTime @map("EndDateTime")
   // PENDING_APPROVAL | CONFIRMED | REJECTED | CANCELLED | CHECKED_IN | NO_SHOW
@@ -234,17 +238,19 @@ model Reservation {
   createdAt       DateTime @default(now()) @map("CreatedAt")
   updatedAt       DateTime @updatedAt @map("UpdatedAt")
 
-  user          User              @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  resource      Resource          @relation(fields: [resourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user          User               @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  resource      Resource           @relation(fields: [resourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   slots         ReservationSlot[]
   approvals     Approval[]
   reallocations Reallocation[]
   sanctions     Sanction[]
   checkIn       CheckIn?
+  series        ReservationSeries? @relation(fields: [seriesId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([userId, startDateTime])
   @@index([resourceId, startDateTime])
   @@index([status, startDateTime])
+  @@index([seriesId])
   @@map("RESERVATION")
 }
 
@@ -264,6 +270,26 @@ model ReservationSlot {
   @@index([reservationId])
   @@index([slotStart])
   @@map("RESERVATION_SLOT")
+}
+
+model ReservationSeries {
+  id                 String    @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  userId             String    @map("UserId") @db.UniqueIdentifier
+  resourceId         String    @map("ResourceId") @db.UniqueIdentifier
+  intervalWeeks      Int       @map("IntervalWeeks")
+  weekdays           String    @map("Weekdays") @db.NVarChar(20)
+  firstStartDateTime DateTime  @map("FirstStartDateTime")
+  durationMinutes    Int       @map("DurationMinutes")
+  occurrenceCount    Int       @map("OccurrenceCount")
+  createdAt          DateTime  @default(now()) @map("CreatedAt")
+  cancelledAt        DateTime? @map("CancelledAt")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  resource     Resource      @relation(fields: [resourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reservations Reservation[]
+
+  @@index([userId])
+  @@map("RESERVATION_SERIES")
 }
 
 model CheckIn {

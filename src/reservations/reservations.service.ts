@@ -49,6 +49,7 @@ export const RESERVATION_INCLUDE = {
   },
   user: { select: { id: true, fullName: true, email: true } },
   checkIn: true,
+  series: { select: { id: true, occurrenceCount: true } },
 } satisfies Prisma.ReservationInclude;
 
 @Injectable()
