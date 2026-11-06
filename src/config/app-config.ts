@@ -1,9 +1,4 @@
-import {
-  type EnvironmentVariables,
-  type ExtraNotificationChannel,
-  type NodeEnv,
-  validateEnvironment,
-} from './environment';
+import { type EnvironmentVariables, type NodeEnv, validateEnvironment } from './environment';
 
 export interface ServerConfig {
   nodeEnv: NodeEnv;
@@ -23,10 +18,6 @@ export interface AuthConfig {
   demoLoginEnabled: boolean;
 }
 
-export interface NotificationsConfig {
-  extraChannels: ExtraNotificationChannel[];
-}
-
 export interface JobsConfig {
   jobKey: string | null;
   noShowEnforcedFrom: Date | null;
@@ -35,7 +26,6 @@ export interface JobsConfig {
 export interface AppConfig {
   server: ServerConfig;
   auth: AuthConfig;
-  notifications: NotificationsConfig;
   jobs: JobsConfig;
 }
 
@@ -60,7 +50,6 @@ export function toAppConfig(env: EnvironmentVariables): AppConfig {
       allowedEmailDomains: env.ALLOWED_EMAIL_DOMAINS,
       demoLoginEnabled: env.DEMO_LOGIN_ENABLED,
     },
-    notifications: { extraChannels: env.NOTIFY_CHANNELS },
     jobs: {
       jobKey: env.JOB_KEY ?? null,
       noShowEnforcedFrom: env.NO_SHOW_ENFORCED_FROM ? new Date(env.NO_SHOW_ENFORCED_FROM) : null,

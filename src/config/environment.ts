@@ -22,9 +22,6 @@ import {
 export const NODE_ENVS = ['development', 'test', 'production'] as const;
 export type NodeEnv = (typeof NODE_ENVS)[number];
 
-export const EXTRA_NOTIFICATION_CHANNELS = ['PUSH', 'EMAIL'] as const;
-export type ExtraNotificationChannel = (typeof EXTRA_NOTIFICATION_CHANNELS)[number];
-
 const MIN_SECRET_LENGTH = 32;
 
 function toBoolean({ value }: TransformFnParams): unknown {
@@ -100,10 +97,6 @@ export class EnvironmentVariables {
   @Transform(toBoolean)
   @IsBoolean()
   DEMO_LOGIN_ENABLED = false;
-
-  @Transform(toList((channel) => channel.toUpperCase()))
-  @IsIn(EXTRA_NOTIFICATION_CHANNELS, { each: true })
-  NOTIFY_CHANNELS: ExtraNotificationChannel[] = [];
 
   @IsOptional()
   @IsString()

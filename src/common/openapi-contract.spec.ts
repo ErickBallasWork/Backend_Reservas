@@ -28,6 +28,8 @@ import { ReservationSeriesController } from '../reservations/series/reservation-
 import { ReservationSeriesService } from '../reservations/series/reservation-series.service';
 import { ReservationsController } from '../reservations/reservations.controller';
 import { ReservationsService } from '../reservations/reservations.service';
+import { NotificationsController } from '../notifications/notifications.controller';
+import { NotificationsService } from '../notifications/notifications.service';
 import { OperatingHoursController } from '../operating-hours/operating-hours.controller';
 import { OperatingHoursService } from '../operating-hours/operating-hours.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -93,6 +95,10 @@ const DOCUMENTED_OPERATIONS: [string, string][] = [
   ['get', '/sanctions'],
   ['patch', '/sanctions/{id}/resolve'],
   ['post', '/sanctions/no-show/run'],
+  ['get', '/notifications'],
+  ['get', '/notifications/unread-count'],
+  ['patch', '/notifications/read-all'],
+  ['patch', '/notifications/{id}/read'],
 ];
 
 function sourceFiles(dir: string): string[] {
@@ -125,6 +131,7 @@ describe('OpenAPI contract', () => {
         ApprovalsController,
         ReallocationsController,
         SanctionsController,
+        NotificationsController,
       ],
       providers: [
         { provide: AuthService, useValue: {} },
@@ -145,6 +152,7 @@ describe('OpenAPI contract', () => {
         { provide: ReallocationsService, useValue: {} },
         { provide: SpocAgendaService, useValue: {} },
         { provide: SanctionsService, useValue: {} },
+        { provide: NotificationsService, useValue: {} },
         { provide: PrismaService, useValue: {} },
       ],
     }).compile();

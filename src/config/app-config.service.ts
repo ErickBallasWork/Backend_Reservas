@@ -1,12 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type {
-  AppConfig,
-  AuthConfig,
-  JobsConfig,
-  NotificationsConfig,
-  ServerConfig,
-} from './app-config';
+import type { AppConfig, AuthConfig, JobsConfig, ServerConfig } from './app-config';
 
 @Injectable()
 export class AppConfigService {
@@ -18,10 +12,6 @@ export class AppConfigService {
 
   get auth(): AuthConfig {
     return this.config.get('auth', { infer: true });
-  }
-
-  get notifications(): NotificationsConfig {
-    return this.config.get('notifications', { infer: true });
   }
 
   get jobs(): JobsConfig {

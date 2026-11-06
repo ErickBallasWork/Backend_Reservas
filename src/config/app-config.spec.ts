@@ -36,7 +36,6 @@ describe('loadAppConfig', () => {
     expect(config.auth.jwtExpiresInSeconds).toBe(15 * 60);
     expect(config.auth.deviceIdleDays).toBe(30);
     expect(config.auth.demoLoginEnabled).toBe(false);
-    expect(config.notifications.extraChannels).toEqual([]);
     expect(config.jobs.jobKey).toBeNull();
     expect(config.jobs.noShowEnforcedFrom).toBeNull();
   });
@@ -66,13 +65,11 @@ describe('loadAppConfig', () => {
       baseEnv({
         CORS_ORIGINS: 'http://localhost:3000, https://app.example.com',
         ALLOWED_EMAIL_DOMAINS: ' TCS.com ,pichincha.com,',
-        NOTIFY_CHANNELS: 'email, push',
       }),
     );
 
     expect(config.server.corsOrigins).toEqual(['http://localhost:3000', 'https://app.example.com']);
     expect(config.auth.allowedEmailDomains).toEqual(['tcs.com', 'pichincha.com']);
-    expect(config.notifications.extraChannels).toEqual(['EMAIL', 'PUSH']);
   });
 
   it.each(['DATABASE_URL', 'CORS_ORIGINS', 'JWT_SECRET', 'ALLOWED_EMAIL_DOMAINS'])(
@@ -92,12 +89,6 @@ describe('loadAppConfig', () => {
   it.each(['yes', '1', 'TRUE'])('rejects the non strict boolean "%s"', (value) => {
     expect(() => loadAppConfig(baseEnv({ DEMO_LOGIN_ENABLED: value }))).toThrow(
       'DEMO_LOGIN_ENABLED',
-    );
-  });
-
-  it('rejects unknown notification channels', () => {
-    expect(() => loadAppConfig(baseEnv({ NOTIFY_CHANNELS: 'EMAIL,SMS' }))).toThrow(
-      'NOTIFY_CHANNELS',
     );
   });
 

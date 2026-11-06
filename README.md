@@ -49,7 +49,6 @@ mensaje lista cada problema.
 | `DEVICE_IDLE_DAYS`         | no            | `30`                 | no      | Días sin uso tras los que un dispositivo aprobado vuelve a pedir acceso, de 1 a 90                                                  |
 | `ALLOWED_EMAIL_DOMAINS`    | sí            | —                    | no      | Dominios permitidos separados por coma, por ejemplo `tcs.com,pichincha.com`                                                         |
 | `DEMO_LOGIN_ENABLED`       | no            | `false`              | no      | `true` habilita `POST /auth/demo` (solo desarrollo). La API no arranca así en producción                                            |
-| `NOTIFY_CHANNELS`          | no            | vacío                | no      | Canales extra a la bandeja: `PUSH`, `EMAIL` o ambos                                                                                 |
 | `JOB_KEY`                  | en producción | —                    | **sí**  | Mínimo 32. Las tareas programadas exigen la cabecera `x-job-key`. Debe ser igual al secret `JOB_KEY` del workflow `no-show-job.yml` |
 | `NO_SHOW_ENFORCED_FROM`    | no            | —                    | no      | Fecha ISO 8601. El job de inasistencia ignora las reservas que empezaron antes                                                      |
 | `INITIAL_SUPERADMIN_EMAIL` | solo seed     | —                    | no      | SUPERADMIN que crea `npm run db:seed`                                                                                               |

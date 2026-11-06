@@ -71,3 +71,19 @@ export const SANCTION_TYPES = ['NO_SHOW'] as const;
 export type SanctionType = (typeof SANCTION_TYPES)[number];
 
 export const CHECK_IN_METHODS = ['BUTTON', 'QR'] as const;
+
+export const NOTIFICATION_TYPES = [
+  'ACCESS_REQUEST',
+  'APPROVAL_REALLOCATED',
+  'APPROVAL_REQUESTED',
+  'NO_SHOW_SANCTION',
+  'RESERVATION_APPROVED',
+  'RESERVATION_CONFIRMED',
+  'RESERVATION_PENDING',
+  'RESERVATION_REALLOCATED',
+  'RESERVATION_REJECTED',
+  'RESERVATION_UPDATED',
+  'SANCTION_RESOLVED',
+  'TRAINING_EXPIRED',
+] as const;
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
