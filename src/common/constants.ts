@@ -24,6 +24,7 @@ export const RESERVATION_STATUSES = [
   'CANCELLED',
   'CHECKED_IN',
   'NO_SHOW',
+  'TRANSFERRED',
 ] as const;
 
 export const Status = {
@@ -33,6 +34,19 @@ export const Status = {
   CANCELLED: 'CANCELLED',
   CHECKED_IN: 'CHECKED_IN',
   NO_SHOW: 'NO_SHOW',
+  TRANSFERRED: 'TRANSFERRED',
+} as const;
+
+
+// Solicitudes de cesión (tabla TRANSFER_REQUEST)
+export const TRANSFER_STATUSES = ['PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED', 'EXPIRED'] as const;
+
+export const TransferStatus = {
+  PENDING: 'PENDING',
+  ACCEPTED: 'ACCEPTED',
+  REJECTED: 'REJECTED',
+  CANCELLED: 'CANCELLED',
+  EXPIRED: 'EXPIRED',
 } as const;
 
 // Estados que ocupan horario (tienen franjas guardadas)

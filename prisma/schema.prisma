@@ -93,6 +93,7 @@ model User {
   notifications     Notification[]
   auditLogs         AuditLog[]
   checkIns          CheckIn[]
+  transferRequests  TransferRequest[]
 
   @@map("USERS")
 }
@@ -136,7 +137,7 @@ model Reservation {
   justification   String   @map("Justification") @db.NVarChar(1000)
   startDateTime   DateTime @map("StartDateTime")
   endDateTime     DateTime @map("EndDateTime")
-  // PENDING_APPROVAL | CONFIRMED | REJECTED | CANCELLED | CHECKED_IN | NO_SHOW
+  // PENDING_APPROVAL | CONFIRMED | REJECTED | CANCELLED | CHECKED_IN | NO_SHOW | TRANSFERRED (cedida)
   status          String   @map("Status") @db.NVarChar(20)
   createdAt       DateTime @default(now()) @map("CreatedAt")
   updatedAt       DateTime @updatedAt @map("UpdatedAt")
@@ -148,6 +149,12 @@ model Reservation {
   reallocations Reallocation[]
   sanctions     Sanction[]
   checkIn       CheckIn?
+
+  // Solicitudes de cesión que otras personas hicieron por esta reserva
+  transferRequests TransferRequest[] @relation("TransferRequested")
+  // Si esta reserva nació de una cesión aceptada, la solicitud de origen
+  transferOrigin   TransferRequest[] @relation("TransferCreated")
+
 
   @@index([userId, startDateTime])
   @@index([resourceId, startDateTime])
@@ -248,6 +255,37 @@ model Sanction {
 
   @@index([userId, status])
   @@map("SANCTION")
+}
+
+// Cesión entre asociados: alguien pide una reserva ocupada y su dueño acepta o rechaza.
+// Si acepta, la reserva del dueño pasa a TRANSFERRED y se crea una nueva para quien la pidió,
+// con el mismo recurso y horario (NewReservationId).
+model TransferRequest {
+  id               String    @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  // Reserva que se pide
+  reservationId    String    @map("ReservationId") @db.UniqueIdentifier
+  // Quién la pide
+  requesterId      String    @map("RequesterId") @db.UniqueIdentifier
+  // Motivo de la reserva nueva: INTERNAL_MEETING | CLIENT_MEETING | TRAINING
+  purpose          String    @map("Purpose") @db.NVarChar(30)
+  // Por qué la necesita: le llega al dueño en el aviso
+  justification    String    @map("Justification") @db.NVarChar(500)
+  // PENDING | ACCEPTED | REJECTED | CANCELLED | EXPIRED
+  status           String    @default("PENDING") @map("Status") @db.NVarChar(10)
+  // Respuesta del dueño (obligatoria si rechaza)
+  responseComment  String?   @map("ResponseComment") @db.NVarChar(500)
+  respondedAt      DateTime? @map("RespondedAt")
+  // Reserva creada para quien la pidió, si el dueño aceptó
+  newReservationId String?   @map("NewReservationId") @db.UniqueIdentifier
+  createdAt        DateTime  @default(now()) @map("CreatedAt")
+
+  reservation    Reservation  @relation("TransferRequested", fields: [reservationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  newReservation Reservation? @relation("TransferCreated", fields: [newReservationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  requester      User         @relation(fields: [requesterId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([reservationId, status])
+  @@index([requesterId, status])
+  @@map("TRANSFER_REQUEST")
 }
 
 // ---------------- Notificaciones y auditoría ----------------
