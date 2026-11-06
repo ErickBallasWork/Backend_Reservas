@@ -8,7 +8,6 @@ import { PrismaService } from '../prisma/prisma.service';
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Container Apps llama a esta ruta para saber si el servicio está vivo (BE-24).
   @Public()
   @Get()
   @ApiOperation({ summary: 'Chequeo de salud: API y base de datos' })

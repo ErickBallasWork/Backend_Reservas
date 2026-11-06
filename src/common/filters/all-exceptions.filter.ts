@@ -20,11 +20,6 @@ const DEFAULT_CODES: Record<number, string> = {
   503: 'SERVICE_UNAVAILABLE',
 };
 
-/**
- * Filtro global de errores: toda respuesta de error sale con el mismo formato
- * { statusCode, code, message, path, timestamp }, para que el frontend la muestre fácil.
- * Para lanzar un error con código propio:  throw new ConflictException({ code: 'SLOT_TAKEN', message: '...' })
- */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger('Errores');
@@ -58,7 +53,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
         code = 'NOT_FOUND';
         message = 'El registro no existe';
       } else if (exception.code === 'P2034') {
-        // Dos transacciones chocaron al mismo tiempo (bloqueo o deadlock en SQL Server).
         status = HttpStatus.CONFLICT;
         code = 'CONCURRENT_CONFLICT';
         message = 'Otra operación se procesó al mismo tiempo. Intenta de nuevo.';
@@ -72,7 +66,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
     } else if (exception instanceof Prisma.PrismaClientInitializationError) {
       status = HttpStatus.SERVICE_UNAVAILABLE;
       code = 'DATABASE_UNAVAILABLE';
-      message = 'La base de datos no está disponible (puede estar despertando). Intenta en un minuto.';
+      message =
+        'La base de datos no está disponible (puede estar despertando). Intenta en un minuto.';
       this.logger.error(exception.message);
     } else {
       this.logger.error(exception instanceof Error ? exception.stack : String(exception));

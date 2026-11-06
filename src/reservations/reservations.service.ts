@@ -8,26 +8,36 @@ import {
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { CatalogLookupService } from '../catalog/catalog-lookup.service';
-import { RESERVATION_TYPE_BY_RESOURCE, ResourceType, Status } from '../common/constants';
+import {
+  MANAGER_ROLES,
+  RESERVATION_TYPE_BY_RESOURCE,
+  ResourceType,
+  Status,
+} from '../common/constants';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { isUniqueViolation } from '../common/db.types';
 import { toSkipTake } from '../common/pagination.dto';
-import { reservationRules } from '../config/reservation-rules';
+import { ReservationRulesService } from '../config/reservation-rules.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { toLocalSlots } from '../operating-hours/operating-calendar';
+import { OperatingHoursService } from '../operating-hours/operating-hours.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SanctionsService } from '../sanctions/sanctions.service';
 import { closePendingTransfers } from '../transfers/transfer-helpers';
-import { CheckInDto, CreateReservationDto, MyReservationsQueryDto } from './dto/reservation.dto';
+import { CreateReservationDto, MyReservationsQueryDto } from './dto/reservation.dto';
+import { LeaderNotifier } from './leader-notifier';
+import { canViewReservation } from './reservation-access.policy';
+import { blockedResourceIds, describeResource } from './reservation-resources';
+import { resolveAttendees } from './attendees-rule';
 import { insertSlots } from './slots';
 import {
   buildSlotStarts,
-  canCancel,
+  canCancelReservation,
   isWithinCheckInWindow,
   RuleViolation,
   validateReservationTimes,
 } from './time-rules';
 
-/** Recurso ya validado con getActiveResource (trae su edificio y, si es laptop, su laboratorio). */
 export type ActiveResource = Awaited<ReturnType<CatalogLookupService['getActiveResource']>>;
 
 export interface NewReservationInput {
@@ -36,28 +46,14 @@ export interface NewReservationInput {
   end: Date;
   purpose: string;
   justification: string;
+  attendees: number | null;
 }
 
 export interface NewReservationOptions {
-  /** false = no avisar al dueño de la reserva nueva (quien llama manda su propio aviso). */
   notifyOwner?: boolean;
-  /** Datos extra para la auditoría, por ejemplo la solicitud de cesión de origen. */
   auditDetails?: Record<string, unknown>;
 }
 
-/** Nombre legible del recurso para los avisos: "Sala Board", "Laboratorio IA 1 (completo)"... */
-export function reservationLabel(resource: {
-  type: string;
-  name: string;
-  parent?: { name: string } | null;
-}): string {
-  if (resource.type === 'LAPTOP') return `la laptop ${resource.name} (${resource.parent?.name ?? 'laboratorio'})`;
-  if (resource.type === 'AI_LAB') return `${resource.name} (completo)`;
-  return resource.name;
-}
-
-
-// Datos que se devuelven junto con cada reserva.
 export const RESERVATION_INCLUDE = {
   resource: {
     select: {
@@ -70,7 +66,21 @@ export const RESERVATION_INCLUDE = {
   },
   user: { select: { id: true, fullName: true, email: true } },
   checkIn: true,
+  series: { select: { id: true, occurrenceCount: true } },
 } satisfies Prisma.ReservationInclude;
+
+export const APPROVALS_INCLUDE = {
+  orderBy: { decisionDate: 'desc' },
+  include: { approver: { select: { fullName: true } } },
+} satisfies Prisma.Reservation$approvalsArgs;
+
+export const REALLOCATIONS_INCLUDE = {
+  orderBy: { reallocationDate: 'desc' },
+  include: {
+    previousResource: { select: RESERVATION_INCLUDE.resource.select },
+    newResource: { select: RESERVATION_INCLUDE.resource.select },
+  },
+} satisfies Prisma.Reservation$reallocationsArgs;
 
 @Injectable()
 export class ReservationsService {
@@ -80,9 +90,11 @@ export class ReservationsService {
     private readonly sanctions: SanctionsService,
     private readonly notifications: NotificationsService,
     private readonly audit: AuditService,
+    private readonly reservationRules: ReservationRulesService,
+    private readonly operatingHours: OperatingHoursService,
+    private readonly leaderNotifier: LeaderNotifier,
   ) {}
 
-  /** Convierte una regla incumplida en un error 422 con su código. */
   static toHttpError(error: unknown): never {
     if (error instanceof RuleViolation) {
       throw new UnprocessableEntityException({ code: error.code, message: error.message });
@@ -90,15 +102,12 @@ export class ReservationsService {
     throw error;
   }
 
-  /** RF-03 a RF-08: reservar una sala, un laboratorio completo o una laptop. */
   async create(user: CurrentUserData, dto: CreateReservationDto) {
-    const rules = reservationRules();
+    const rules = this.reservationRules.current();
 
-    // 1) Sanciones. Antes se calculan los No-Show pendientes de este usuario (respaldo de la tarea).
     await this.sanctions.processNoShows({ userId: user.id });
     await this.sanctions.assertNoActiveSanction(user.id);
 
-    // 2) Reglas de tiempo: franjas, anticipación y duración máxima (RF-05, RF-06).
     const start = new Date(dto.startDateTime);
     const end = new Date(dto.endDateTime);
     try {
@@ -107,10 +116,23 @@ export class ReservationsService {
       ReservationsService.toHttpError(error);
     }
 
-    // 3) Qué recurso se reserva (RF-03).
     const resource = await this.lookup.getActiveResource(dto.resourceId);
+    let attendees: number | null = null;
+    try {
+      attendees = resolveAttendees(resource.type as ResourceType, dto.attendees, resource.capacity);
+    } catch (error) {
+      ReservationsService.toHttpError(error);
+    }
+    const slotStarts = buildSlotStarts(start, end, rules.slotMinutes);
+    try {
+      await this.operatingHours.assertOpen(
+        resource,
+        toLocalSlots(slotStarts, this.operatingHours.timeZone),
+      );
+    } catch (error) {
+      ReservationsService.toHttpError(error);
+    }
 
-    // 4) Todo en una transacción: reserva + franjas + avisos + auditoría.
     try {
       const reservation = await this.prisma.$transaction(
         (tx) =>
@@ -120,10 +142,11 @@ export class ReservationsService {
             end,
             purpose: dto.purpose,
             justification: dto.justification,
+            attendees,
           }),
         { timeout: 20_000 },
       );
-      return this.get(reservation.id);
+      return this.getById(reservation.id);
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new ConflictException({
@@ -135,11 +158,6 @@ export class ReservationsService {
     }
   }
 
-  /**
-   * Guarda una reserva nueva con sus franjas, avisos y auditoría, dentro de la transacción "tx".
-   * La usan crear una reserva y aceptar una cesión. No revisa reglas de tiempo ni sanciones:
-   * eso lo hace quien la llama. Si una franja ya está ocupada, lanza el error P2002 de Prisma.
-   */
   async createInTx(
     tx: Prisma.TransactionClient,
     owner: Pick<CurrentUserData, 'id' | 'fullName'>,
@@ -147,18 +165,12 @@ export class ReservationsService {
     options: NewReservationOptions = {},
   ) {
     const { resource, start, end } = input;
-    const rules = reservationRules();
+    const rules = this.reservationRules.current();
     const reservationType = RESERVATION_TYPE_BY_RESOURCE[resource.type as ResourceType];
-    // El laboratorio completo bloquea también cada una de sus laptops; y una laptop tomada
-    // impide reservar el laboratorio completo en ese horario (choca en la franja de la laptop).
-    const blockedIds =
-      resource.type === 'AI_LAB'
-        ? [resource.id, ...(await this.lookup.activeLaptopIds(resource.id, tx))]
-        : [resource.id];
+    const blockedIds = await blockedResourceIds(this.lookup, resource, tx);
     const slotStarts = buildSlotStarts(start, end, rules.slotMinutes);
     const status = input.purpose === 'TRAINING' ? Status.PENDING_APPROVAL : Status.CONFIRMED;
-    const label = reservationLabel(resource);
-    const justification = input.justification.trim();
+    const label = describeResource(resource);
 
     const created = await tx.reservation.create({
       data: {
@@ -166,7 +178,8 @@ export class ReservationsService {
         resourceId: resource.id,
         reservationType,
         purpose: input.purpose,
-        justification,
+        justification: input.justification,
+        attendees: input.attendees,
         startDateTime: start,
         endDateTime: end,
         status,
@@ -179,8 +192,10 @@ export class ReservationsService {
       await this.notifications.notify(
         {
           userId: owner.id,
+          reservationId: created.id,
           type: status === Status.CONFIRMED ? 'RESERVATION_CONFIRMED' : 'RESERVATION_PENDING',
-          title: status === Status.CONFIRMED ? 'Reserva confirmada' : 'Reserva pendiente de aprobación',
+          title:
+            status === Status.CONFIRMED ? 'Reserva confirmada' : 'Reserva pendiente de aprobación',
           message:
             status === Status.CONFIRMED
               ? `Tu reserva de ${label} quedó confirmada.`
@@ -191,7 +206,12 @@ export class ReservationsService {
     }
 
     if (status === Status.PENDING_APPROVAL) {
-      await this.notifyLeaders(tx, owner.fullName, label);
+      await this.leaderNotifier.requestApproval(tx, {
+        requesterId: owner.id,
+        requesterName: owner.fullName,
+        label,
+        reservationId: created.id,
+      });
     }
 
     await this.audit.log(
@@ -205,7 +225,8 @@ export class ReservationsService {
           startDateTime: start,
           endDateTime: end,
           purpose: input.purpose,
-          justification,
+          justification: input.justification,
+          attendees: input.attendees,
           reservationType,
           status,
           blockedResources: blockedIds.length,
@@ -217,42 +238,48 @@ export class ReservationsService {
     return created;
   }
 
-
-  // Pendiente: cuando se defina "asociados a cargo", avisar solo al Líder del asociado.
-  private async notifyLeaders(tx: Prisma.TransactionClient, requester: string, label: string) {
-    const leaders = await tx.userRole.findMany({
-      where: { role: { name: 'LIDER' }, user: { isActive: true } },
-      select: { userId: true },
-    });
-    for (const userId of [...new Set<string>(leaders.map((l) => l.userId))]) {
-      await this.notifications.notify(
-        {
-          userId,
-          type: 'APPROVAL_REQUESTED',
-          title: 'Entrenamiento por aprobar',
-          message: `${requester} solicitó ${label} para un entrenamiento.`,
-        },
-        tx,
-      );
-    }
-  }
-
-  async get(id: string) {
+  async getById(id: string) {
     const reservation = await this.prisma.reservation.findUnique({
       where: { id },
       include: {
         ...RESERVATION_INCLUDE,
-        approvals: {
-          orderBy: { decisionDate: 'desc' },
-          include: { approver: { select: { fullName: true } } },
-        },
-        reallocations: { orderBy: { reallocationDate: 'desc' } },
+        approvals: APPROVALS_INCLUDE,
+        reallocations: REALLOCATIONS_INCLUDE,
       },
     });
     if (!reservation) {
-      throw new NotFoundException({ code: 'RESERVATION_NOT_FOUND', message: `No existe la reserva ${id}` });
+      throw new NotFoundException({
+        code: 'RESERVATION_NOT_FOUND',
+        message: `No existe la reserva ${id}`,
+      });
     }
     return reservation;
+  }
+
+  async getForViewer(user: CurrentUserData, id: string) {
+    const reservation = await this.getById(id);
+    const ownerIsManagedBy = await this.isManagedBy(user, reservation.userId);
+    const allowed = canViewReservation(user, {
+      userId: reservation.userId,
+      resourceBuildingId: reservation.resource.building.id,
+      ownerIsManagedBy,
+    });
+    if (!allowed) {
+      throw new ForbiddenException({
+        code: 'NOT_OWNER',
+        message: 'No tienes permiso para ver esta reserva',
+      });
+    }
+    return reservation;
+  }
+
+  private async isManagedBy(user: CurrentUserData, ownerId: string) {
+    if (!user.roles.some((role) => MANAGER_ROLES.includes(role))) return false;
+    const link = await this.prisma.managedAssociate.findFirst({
+      where: { managerId: user.id, associateId: ownerId },
+      select: { id: true },
+    });
+    return link !== null;
   }
 
   async listMine(userId: string, query: MyReservationsQueryDto) {
@@ -271,7 +298,11 @@ export class ReservationsService {
     const [items, total] = await Promise.all([
       this.prisma.reservation.findMany({
         where,
-        include: RESERVATION_INCLUDE,
+        include: {
+          ...RESERVATION_INCLUDE,
+          approvals: APPROVALS_INCLUDE,
+          reallocations: REALLOCATIONS_INCLUDE,
+        },
         orderBy: { startDateTime: 'desc' },
         ...toSkipTake(query),
       }),
@@ -280,10 +311,13 @@ export class ReservationsService {
     return { total, page: query.page, pageSize: query.pageSize, items };
   }
 
-  private async getOwned(userId: string, id: string) {
+  async getOwned(userId: string, id: string) {
     const reservation = await this.prisma.reservation.findUnique({ where: { id } });
     if (!reservation) {
-      throw new NotFoundException({ code: 'RESERVATION_NOT_FOUND', message: `No existe la reserva ${id}` });
+      throw new NotFoundException({
+        code: 'RESERVATION_NOT_FOUND',
+        message: `No existe la reserva ${id}`,
+      });
     }
     if (reservation.userId !== userId) {
       throw new ForbiddenException({ code: 'NOT_OWNER', message: 'Esta reserva no es tuya' });
@@ -291,7 +325,6 @@ export class ReservationsService {
     return reservation;
   }
 
-  /** RF-05: cancelar con la anticipación mínima. Libera las franjas de inmediato. */
   async cancel(user: CurrentUserData, id: string) {
     const reservation = await this.getOwned(user.id, id);
     if (reservation.status !== Status.CONFIRMED && reservation.status !== Status.PENDING_APPROVAL) {
@@ -300,8 +333,17 @@ export class ReservationsService {
         message: `No se puede cancelar una reserva en estado ${reservation.status}`,
       });
     }
-    const rules = reservationRules();
-    if (!canCancel(reservation.startDateTime, new Date(), rules.cancelMinHours)) {
+    const rules = this.reservationRules.current();
+    const reallocated =
+      (await this.prisma.reallocation.count({ where: { reservationId: id } })) > 0;
+    if (
+      !canCancelReservation(
+        reservation.startDateTime,
+        new Date(),
+        rules.cancelMinHours,
+        reallocated,
+      )
+    ) {
       throw new UnprocessableEntityException({
         code: 'CANCEL_TOO_LATE',
         message: `Solo se puede cancelar con al menos ${rules.cancelMinHours} horas de anticipación`,
@@ -310,21 +352,21 @@ export class ReservationsService {
     await this.prisma.$transaction(async (tx) => {
       await tx.reservationSlot.deleteMany({ where: { reservationId: id } });
       await tx.reservation.update({ where: { id }, data: { status: Status.CANCELLED } });
-      // Quien había pedido esta reserva en cesión se entera de que el horario quedó libre.
+      await this.notifications.resolveForReservation(id, ['RESERVATION_REMINDER'], tx);
       await closePendingTransfers(tx, this.notifications, id, {
         title: 'La reserva que pediste se liberó',
-        message: 'Su dueño la canceló y el horario quedó libre. Si todavía lo necesitas, intenta reservarlo.',
+        message:
+          'Su dueño la canceló y el horario quedó libre. Si todavía lo necesitas, intenta reservarlo.',
       });
       await this.audit.log(
         { userId: user.id, action: 'RESERVATION_CANCELLED', entity: 'Reservation', entityId: id },
         tx,
       );
     });
-    return this.get(id);
+    return this.getById(id);
   }
 
-  /** RF-12 / HU-20: registrar el uso del espacio dentro de la ventana de check-in. */
-  async checkIn(user: CurrentUserData, id: string, dto: CheckInDto) {
+  async checkIn(user: CurrentUserData, id: string) {
     const reservation = await this.getOwned(user.id, id);
     if (reservation.status !== Status.CONFIRMED) {
       throw new UnprocessableEntityException({
@@ -332,7 +374,7 @@ export class ReservationsService {
         message: `No se puede registrar el uso de una reserva en estado ${reservation.status}`,
       });
     }
-    const rules = reservationRules();
+    const rules = this.reservationRules.current();
     if (
       !isWithinCheckInWindow(
         reservation.startDateTime,
@@ -347,15 +389,25 @@ export class ReservationsService {
       });
     }
     await this.prisma.$transaction(async (tx) => {
-      await tx.checkIn.create({
-        data: { reservationId: id, userId: user.id, method: dto.method ?? 'BUTTON' },
+      const updated = await tx.reservation.updateMany({
+        where: { id, status: Status.CONFIRMED },
+        data: { status: Status.CHECKED_IN },
       });
-      await tx.reservation.update({ where: { id }, data: { status: Status.CHECKED_IN } });
+      if (updated.count === 0) {
+        throw new ConflictException({
+          code: 'CONCURRENT_CONFLICT',
+          message: 'La reserva cambió mientras registrabas el uso. Actualiza e inténtalo de nuevo.',
+        });
+      }
+      await tx.checkIn.create({
+        data: { reservationId: id, userId: user.id, method: 'BUTTON' },
+      });
+      await this.notifications.resolveForReservation(id, ['RESERVATION_REMINDER'], tx);
       await this.audit.log(
         { userId: user.id, action: 'RESERVATION_CHECKED_IN', entity: 'Reservation', entityId: id },
         tx,
       );
     });
-    return this.get(id);
+    return this.getById(id);
   }
 }

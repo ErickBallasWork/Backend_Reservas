@@ -15,3 +15,8 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 *.log
+
+# Claude Code
+CLAUDE.md
+CLAUDE.local.md
+.claude/

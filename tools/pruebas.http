@@ -1,7 +1,7 @@
 # Peticiones de prueba para la extensión "REST Client" de VS Code (humao.rest-client).
 # Encima de cada petición aparece "Send Request": haz clic y verás la respuesta a la derecha.
 # Requisitos: base local encendida (npm run db:up), migrada y con seed, y la API corriendo (npm run start:dev).
-# Funciona con AUTH_MODE=demo: el usuario se elige con la cabecera x-demo-user.
+# Funciona con DEMO_LOGIN_ENABLED=true: cada usuario obtiene su token con POST /auth/demo (petición 0).
 
 @api = http://localhost:3001/api/v1
 @ana = ana.asociado@demo.com
@@ -11,36 +11,68 @@
 # Pasado mañana (las reservas piden 24 h de anticipación). 15:00Z = 10:00 en Ecuador.
 @dia = {{$datetime "YYYY-MM-DD" 2 d}}
 
+### 0. Tokens de los usuarios demo (ejecuta estas cuatro primero)
+# @name loginAna
+POST {{api}}/auth/demo
+Content-Type: application/json
+
+{ "email": "{{ana}}" }
+
+###
+# @name loginLuis
+POST {{api}}/auth/demo
+Content-Type: application/json
+
+{ "email": "{{luis}}" }
+
+###
+# @name loginCarlos
+POST {{api}}/auth/demo
+Content-Type: application/json
+
+{ "email": "{{carlos}}" }
+
+###
+# @name loginAdmin
+POST {{api}}/auth/demo
+Content-Type: application/json
+
+{ "email": "{{admin}}" }
+
+@token_ana = {{loginAna.response.body.accessToken}}
+@token_luis = {{loginLuis.response.body.accessToken}}
+@token_carlos = {{loginCarlos.response.body.accessToken}}
+@token_admin = {{loginAdmin.response.body.accessToken}}
+
 ### 1. Salud: ¿la API ve la base?
 GET {{api}}/health
 
 ### 2. Mi perfil (como Ana)
 GET {{api}}/me
-x-demo-user: {{ana}}
+Authorization: Bearer {{token_ana}}
 
 ### 3. Catálogo completo (edificio > sala o laboratorio > laptops)
 # @name arbol
 GET {{api}}/catalog/tree
-x-demo-user: {{ana}}
+Authorization: Bearer {{token_ana}}
 
 ### 4. Salas y laboratorios: guarda los ids para las siguientes peticiones
 # @name recursos
 GET {{api}}/resources
-x-demo-user: {{ana}}
+Authorization: Bearer {{token_ana}}
 
-@salaId = {{recursos.response.body.$[?(@.name == 'Sala Pichincha')].id}}
-@salaCotopaxiId = {{recursos.response.body.$[?(@.name == 'Sala Cotopaxi')].id}}
-@labId = {{recursos.response.body.$[?(@.name == 'Laboratorio IA 1')].id}}
-@laptopId = {{recursos.response.body.$[?(@.name == 'LAP-IA-01')].id}}
+@salaId = {{recursos.response.body.$[?(@.name == 'Sala Board' && @.building.name == 'Amazonas Plaza')].id}}
+@labId = {{recursos.response.body.$[?(@.name == 'Laboratorio IA')].id}}
+@laptopId = {{recursos.response.body.$[?(@.name == 'AMZ-LAP-01')].id}}
 
 ### 5. ¿Qué está libre ese día?
 GET {{api}}/availability/search?from={{dia}}T13:00:00Z&to={{dia}}T23:00:00Z&type=MEETING_ROOM
-x-demo-user: {{ana}}
+Authorization: Bearer {{token_ana}}
 
-### 6. Ana reserva la Sala Pichincha (queda CONFIRMED)
+### 6. Ana reserva la Sala Board de Amazonas Plaza (queda CONFIRMED)
 # @name reservaSala
 POST {{api}}/reservations
-x-demo-user: {{ana}}
+Authorization: Bearer {{token_ana}}
 Content-Type: application/json
 
 {
@@ -53,7 +85,7 @@ Content-Type: application/json
 
 ### 7. Doble reserva del mismo horario: debe responder 409 SLOT_TAKEN
 POST {{api}}/reservations
-x-demo-user: {{luis}}
+Authorization: Bearer {{token_luis}}
 Content-Type: application/json
 
 {
@@ -66,7 +98,7 @@ Content-Type: application/json
 
 ### 8. Ana reserva una laptop
 POST {{api}}/reservations
-x-demo-user: {{ana}}
+Authorization: Bearer {{token_ana}}
 Content-Type: application/json
 
 {
@@ -79,7 +111,7 @@ Content-Type: application/json
 
 ### 9. Laboratorio completo a la misma hora que la laptop: 409 (la laptop ya está tomada)
 POST {{api}}/reservations
-x-demo-user: {{luis}}
+Authorization: Bearer {{token_luis}}
 Content-Type: application/json
 
 {
@@ -93,7 +125,7 @@ Content-Type: application/json
 ### 10. Entrenamiento en el laboratorio completo: queda PENDING_APPROVAL
 # @name entrenamiento
 POST {{api}}/reservations
-x-demo-user: {{ana}}
+Authorization: Bearer {{token_ana}}
 Content-Type: application/json
 
 {
@@ -106,11 +138,11 @@ Content-Type: application/json
 
 ### 11. El Líder ve los pendientes
 GET {{api}}/approvals/pending
-x-demo-user: {{luis}}
+Authorization: Bearer {{token_luis}}
 
 ### 12. El Líder aprueba el entrenamiento
 POST {{api}}/approvals/{{entrenamiento.response.body.id}}
-x-demo-user: {{luis}}
+Authorization: Bearer {{token_luis}}
 Content-Type: application/json
 
 {
@@ -118,47 +150,72 @@ Content-Type: application/json
   "comments": "Adelante"
 }
 
-### 13. El SPOC de Edificio mueve la reserva de Ana a la Sala Cotopaxi
+### 13. El SPOC de Edificio mueve la reserva de Ana a otra hora
 POST {{api}}/reservations/{{reservaSala.response.body.id}}/reallocate
-x-demo-user: {{carlos}}
+Authorization: Bearer {{token_carlos}}
 Content-Type: application/json
 
 {
-  "newResourceId": "{{salaCotopaxiId}}",
-  "justification": "Visita de cliente en la Sala Pichincha"
+  "newStartDateTime": "{{dia}}T16:00:00Z",
+  "newEndDateTime": "{{dia}}T17:00:00Z",
+  "justification": "Visita de cliente en la Sala Board"
 }
 
 ### 14. Bandeja de avisos de Ana (debe tener los avisos de confirmación y reasignación)
 GET {{api}}/notifications
-x-demo-user: {{ana}}
+Authorization: Bearer {{token_ana}}
 
 ### 15. Mis reservas
 GET {{api}}/reservations/mine
-x-demo-user: {{ana}}
+Authorization: Bearer {{token_ana}}
 
 ### 16. Ana cancela su reserva de sala (se puede hasta 24 h antes)
 PATCH {{api}}/reservations/{{reservaSala.response.body.id}}/cancel
-x-demo-user: {{ana}}
+Authorization: Bearer {{token_ana}}
 
 ### 17. Panel del Líder: métricas
 GET {{api}}/dashboard/metrics
-x-demo-user: {{luis}}
+Authorization: Bearer {{token_luis}}
 
 ### 18. Reporte de ocupación del mes (Administrador)
 GET {{api}}/reports/occupancy?from=2026-11-01T05:00:00Z&to=2026-12-01T05:00:00Z
-x-demo-user: {{admin}}
+Authorization: Bearer {{token_admin}}
 
 ### 19. Auditoría (Administrador)
 GET {{api}}/audit
-x-demo-user: {{admin}}
+Authorization: Bearer {{token_admin}}
+
+### 20. Planos de piso
+# @name planos
+GET {{api}}/floor-plans
+Authorization: Bearer {{token_ana}}
+
+@planoId = {{planos.response.body.$[?(@.buildingName == 'Amazonas Plaza')].id}}
+
+### 21. Plano con sus zonas y laptops
+GET {{api}}/floor-plans/{{planoId}}
+Authorization: Bearer {{token_ana}}
+
+### 22. Estado del plano en una franja (máximo 48 h)
+GET {{api}}/floor-plans/{{planoId}}/status?from={{dia}}T15:00:00Z&to={{dia}}T18:00:00Z
+Authorization: Bearer {{token_ana}}
 
 # ---------------- Cesión de reservas entre asociados ----------------
 @sofia = sofia.spocadmin@demo.com
 
-### 20. Ana reserva la Sala Pichincha a las 13:00 (la que luego le van a pedir)
+### 23. Token de Sofía (la cesión necesita una tercera persona)
+# @name loginSofia
+POST {{api}}/auth/demo
+Content-Type: application/json
+
+{ "email": "{{sofia}}" }
+
+@token_sofia = {{loginSofia.response.body.accessToken}}
+
+### 24. Ana reserva la Sala Board a las 13:00 (la que luego le van a pedir)
 # @name reservaParaCeder
 POST {{api}}/reservations
-x-demo-user: {{ana}}
+Authorization: Bearer {{token_ana}}
 Content-Type: application/json
 
 {
@@ -166,75 +223,79 @@ Content-Type: application/json
   "startDateTime": "{{dia}}T18:00:00Z",
   "endDateTime": "{{dia}}T19:00:00Z",
   "purpose": "INTERNAL_MEETING",
-  "justification": "Reunión de seguimiento del equipo"
+  "justification": "Reunión de seguimiento del equipo",
+  "attendees": 4
 }
 
-### 21. Luis ve la sala ocupada: en "reservations" aparece la reserva con transferable = true
+### 25. Luis ve la sala ocupada: en "reservations" aparece la reserva con transferable = true
 GET {{api}}/availability/resources/{{salaId}}?from={{dia}}T13:00:00Z&to={{dia}}T23:00:00Z
-x-demo-user: {{luis}}
+Authorization: Bearer {{token_luis}}
 
-### 22. Luis pide la reserva y explica por qué (a Ana le llega un aviso con el motivo)
+### 26. Luis pide la reserva y explica por qué (a Ana le llega un aviso con el motivo)
 # @name pedidoLuis
 POST {{api}}/reservations/{{reservaParaCeder.response.body.id}}/transfer-requests
-x-demo-user: {{luis}}
+Authorization: Bearer {{token_luis}}
 Content-Type: application/json
 
 {
   "purpose": "CLIENT_MEETING",
-  "justification": "Llega un cliente a las 13:00 y es la única sala con pantalla grande."
+  "justification": "Llega un cliente a las 13:00 y es la única sala con pantalla grande.",
+  "attendees": 6
 }
 
-### 23. Sofía también la pide
+### 27. Sofía también la pide
 # @name pedidoSofia
 POST {{api}}/reservations/{{reservaParaCeder.response.body.id}}/transfer-requests
-x-demo-user: {{sofia}}
+Authorization: Bearer {{token_sofia}}
 Content-Type: application/json
 
 {
   "purpose": "INTERNAL_MEETING",
-  "justification": "Necesito hacer una capacitación corta con mi equipo."
+  "justification": "Necesito hacer una capacitación corta con mi equipo.",
+  "attendees": 5
 }
 
-### 24. Ana ve las solicitudes que le llegaron (con nombre, correo y motivo de cada uno)
+### 28. Ana ve las solicitudes que le llegaron (con nombre, correo y motivo de cada uno)
 GET {{api}}/transfer-requests/received?status=PENDING
-x-demo-user: {{ana}}
+Authorization: Bearer {{token_ana}}
 
-### 25. Bandeja de Ana: aviso TRANSFER_REQUESTED con el motivo
+### 29. Bandeja de Ana: avisos TRANSFER_REQUESTED con el motivo
 GET {{api}}/notifications?unreadOnly=true
-x-demo-user: {{ana}}
+Authorization: Bearer {{token_ana}}
 
-### 26. Ana rechaza a Sofía (el comentario es obligatorio)
+### 30. Ana rechaza a Sofía (el comentario es obligatorio)
 POST {{api}}/transfer-requests/{{pedidoSofia.response.body.id}}/reject
-x-demo-user: {{ana}}
+Authorization: Bearer {{token_ana}}
 Content-Type: application/json
 
 {
   "comment": "Se la voy a ceder a Luis porque tiene un cliente."
 }
 
-### 27. Ana le cede la reserva a Luis: la de Ana queda TRANSFERRED y se crea la de Luis
+### 31. Ana le cede la reserva a Luis: la de Ana queda TRANSFERRED y se crea la de Luis
 POST {{api}}/transfer-requests/{{pedidoLuis.response.body.id}}/accept
-x-demo-user: {{ana}}
+Authorization: Bearer {{token_ana}}
 Content-Type: application/json
 
 {
   "comment": "Sin problema, me muevo a otra sala."
 }
 
-### 28. Mis reservas de Luis: aparece la Sala Pichincha CONFIRMED con el mismo horario
+### 32. Mis reservas de Luis: aparece la Sala Board CONFIRMED con el mismo horario
 GET {{api}}/reservations/mine
-x-demo-user: {{luis}}
+Authorization: Bearer {{token_luis}}
 
-### 29. Lo que envió Sofía: REJECTED con el comentario de Ana
+### 33. Lo que envió Sofía: REJECTED con el comentario de Ana
 GET {{api}}/transfer-requests/sent
-x-demo-user: {{sofia}}
+Authorization: Bearer {{token_sofia}}
 
-### 30. Pedir dos veces lo mismo o pedir algo propio da error (aquí: 422 OWN_RESERVATION)
+### 34. Pedir una reserva propia da error: 422 OWN_RESERVATION
 POST {{api}}/reservations/{{reservaParaCeder.response.body.id}}/transfer-requests
-x-demo-user: {{ana}}
+Authorization: Bearer {{token_ana}}
 Content-Type: application/json
 
 {
   "purpose": "INTERNAL_MEETING",
-  "justification": "Prueba"
+  "justification": "Prueba",
+  "attendees": 2
 }

@@ -1,54 +1,69 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsDateString, IsIn, IsOptional, IsUUID } from 'class-validator';
 import { PURPOSES, RESERVATION_STATUSES } from '../../common/constants';
 import { PaginationQueryDto } from '../../common/pagination.dto';
 
+const FROM_DESCRIPTION = 'Range start (ISO 8601), applied to the reservation start';
+const TO_DESCRIPTION = 'Range end (ISO 8601), exclusive';
+
 export class MetricsQueryDto {
-  /** Desde (ISO 8601), filtra por inicio de la reserva */
+  @ApiPropertyOptional({ description: FROM_DESCRIPTION })
   @IsOptional()
   @IsDateString()
   from?: string;
 
-  /** Hasta (ISO 8601) */
+  @ApiPropertyOptional({ description: TO_DESCRIPTION })
   @IsOptional()
   @IsDateString()
   to?: string;
 
+  @ApiPropertyOptional({ format: 'uuid' })
   @IsOptional()
   @IsUUID()
   buildingId?: string;
 }
 
 export class DashboardQueryDto extends PaginationQueryDto {
-  /** Desde (ISO 8601), filtra por inicio de la reserva */
+  @ApiPropertyOptional({ description: FROM_DESCRIPTION })
   @IsOptional()
   @IsDateString()
   from?: string;
 
-  /** Hasta (ISO 8601) */
+  @ApiPropertyOptional({ description: TO_DESCRIPTION })
   @IsOptional()
   @IsDateString()
   to?: string;
 
+  @ApiPropertyOptional({ format: 'uuid' })
   @IsOptional()
   @IsUUID()
   buildingId?: string;
 
-  @ApiProperty({ enum: [...RESERVATION_STATUSES], required: false })
+  @ApiPropertyOptional({ enum: [...RESERVATION_STATUSES] })
   @IsOptional()
   @IsIn([...RESERVATION_STATUSES])
   status?: string;
 
-  @ApiProperty({ enum: [...PURPOSES], required: false })
+  @ApiPropertyOptional({ enum: [...PURPOSES] })
   @IsOptional()
   @IsIn([...PURPOSES])
   purpose?: string;
 
+  @ApiPropertyOptional({ format: 'uuid' })
   @IsOptional()
   @IsUUID()
   userId?: string;
 
+  @ApiPropertyOptional({ format: 'uuid' })
   @IsOptional()
   @IsUUID()
   resourceId?: string;
+
+  @ApiPropertyOptional({
+    enum: ['true'],
+    description: 'Set on automatic refreshes so they are not written to the audit log',
+  })
+  @IsOptional()
+  @IsIn(['true'])
+  refresh?: string;
 }

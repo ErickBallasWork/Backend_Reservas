@@ -15,22 +15,20 @@ const TYPE_LABEL: Record<string, string> = {
   LAPTOP: 'una laptop',
 };
 
-/** Consultas del catálogo que también usan reservas y reasignaciones. */
 @Injectable()
 export class CatalogLookupService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Devuelve el recurso si existe, está activo y su edificio también.
-   * Si es laptop, su laboratorio también debe estar activo. Si se pasa "expected", valida el tipo.
-   */
   async getActiveResource(id: string, expected?: ResourceType[]) {
     const resource = await this.prisma.resource.findUnique({
       where: { id },
       include: { building: true, parent: true },
     });
     if (!resource) {
-      throw new NotFoundException({ code: 'RESOURCE_NOT_FOUND', message: `No existe el recurso ${id}` });
+      throw new NotFoundException({
+        code: 'RESOURCE_NOT_FOUND',
+        message: `No existe el recurso ${id}`,
+      });
     }
     if (expected && !(expected as string[]).includes(resource.type)) {
       throw new UnprocessableEntityException({
@@ -48,7 +46,6 @@ export class CatalogLookupService {
     return resource;
   }
 
-  /** Ids de las laptops activas de un laboratorio. Pasa "db" para leer dentro de una transacción. */
   async activeLaptopIds(labId: string, db: Db = this.prisma): Promise<string[]> {
     const laptops = await db.resource.findMany({
       where: { parentResourceId: labId, type: 'LAPTOP', isActive: true },
@@ -57,11 +54,15 @@ export class CatalogLookupService {
     return laptops.map((l) => l.id);
   }
 
-  /** Reservas que todavía ocupan horario a futuro (HU-05). */
-  futureReservations(where: Prisma.ReservationWhereInput) {
-    return this.prisma.reservation.findMany({
+  futureReservations(where: Prisma.ReservationWhereInput, db: Db = this.prisma) {
+    return db.reservation.findMany({
       where: { ...where, status: { in: BLOCKING_STATUSES }, endDateTime: { gt: new Date() } },
-      include: {
+      select: {
+        id: true,
+        purpose: true,
+        status: true,
+        startDateTime: true,
+        endDateTime: true,
         user: { select: { id: true, fullName: true, email: true } },
         resource: { select: { id: true, name: true, type: true } },
       },
@@ -69,9 +70,12 @@ export class CatalogLookupService {
     });
   }
 
-  /** Impide inactivar o mover un recurso si tiene reservas futuras (HU-01, HU-05). */
-  async assertNoFutureReservations(where: Prisma.ReservationWhereInput, what: string) {
-    const count = await this.prisma.reservation.count({
+  async assertNoFutureReservations(
+    where: Prisma.ReservationWhereInput,
+    what: string,
+    db: Db = this.prisma,
+  ) {
+    const count = await db.reservation.count({
       where: { ...where, status: { in: BLOCKING_STATUSES }, endDateTime: { gt: new Date() } },
     });
     if (count > 0) {

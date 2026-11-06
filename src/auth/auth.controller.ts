@@ -1,41 +1,66 @@
-import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import { ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AccessRequestStatusQueryDto } from '../access-requests/dto/access-request.dto';
 import { Public } from '../common/current-user/public.decorator';
-import { authMode } from './auth-config';
+import { ApiErrorResponses } from '../common/error-response.dto';
+import { limitFor } from '../throttling/rate-limits';
 import { AuthService } from './auth.service';
-import { DemoLoginDto, GoogleLoginDto } from './dto/auth.dto';
+import { DevicesService } from './devices.service';
+import { DemoLoginDto, RefreshDto } from './dto/auth.dto';
+import { DeviceSessionResponseDto, SessionResponseDto } from './dto/auth-response.dto';
 
 @ApiTags('Autenticación')
+@ApiErrorResponses(400, 401, 403, 404, 409)
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
-
-  // El Client ID de Google no es secreto (va en el HTML de cualquier página con el botón).
-  // Se entrega desde aquí para que el frontend y tools/login-google.html no lo tengan escrito.
-  @Public()
-  @Get('config')
-  @ApiOperation({ summary: 'Datos públicos para mostrar el botón de Google (Client ID y modo)' })
-  config() {
-    return { authMode: authMode(), googleClientId: process.env.GOOGLE_CLIENT_ID || null };
-  }
+  constructor(
+    private readonly auth: AuthService,
+    private readonly devices: DevicesService,
+  ) {}
 
   @Public()
-  @Post('google')
+  @Throttle(limitFor('deviceSession'))
+  @Post('device-session')
   @HttpCode(200)
+  @ApiOkResponse({ type: DeviceSessionResponseDto })
   @ApiOperation({
-    summary: 'Iniciar sesión con Google (solo correos de los dominios permitidos)',
-    description:
-      'Recibe el "credential" del botón de Google y devuelve el token de la API (accessToken). ' +
-      'El frontend lo envía después en cada petición: Authorization: Bearer <accessToken>.',
+    summary: 'Primer ingreso de un dispositivo con una solicitud aprobada (una sola vez)',
   })
-  google(@Body() dto: GoogleLoginDto) {
-    return this.auth.loginWithGoogle(dto.credential);
+  deviceSession(@Body() dto: AccessRequestStatusQueryDto) {
+    return this.devices.redeem(dto);
   }
 
   @Public()
+  @Throttle(limitFor('refresh'))
+  @Post('refresh')
+  @HttpCode(200)
+  @ApiOkResponse({ type: DeviceSessionResponseDto })
+  @ApiOperation({
+    summary: 'Renovar la sesión de un dispositivo aprobado. El refresh token rota en cada uso',
+  })
+  refresh(@Body() dto: RefreshDto) {
+    return this.devices.refresh(dto);
+  }
+
+  @Public()
+  @Throttle(limitFor('logout'))
+  @Post('logout')
+  @HttpCode(204)
+  @ApiNoContentResponse()
+  @ApiOperation({ summary: 'Cerrar sesión: revoca el dispositivo dueño del refresh token' })
+  logout(@Body() dto: RefreshDto) {
+    return this.devices.logout(dto);
+  }
+
+  @Public()
+  @Throttle(limitFor('demoLogin'))
   @Post('demo')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Solo AUTH_MODE=demo: iniciar sesión como usuario demo, sin Google' })
+  @ApiOkResponse({ type: SessionResponseDto })
+  @ApiOperation({
+    summary: 'Solo desarrollo (DEMO_LOGIN_ENABLED=true): iniciar sesión como usuario demo',
+  })
   demo(@Body() dto: DemoLoginDto) {
     return this.auth.loginDemo(dto.email);
   }

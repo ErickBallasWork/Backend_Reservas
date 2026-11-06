@@ -1,13 +1,13 @@
-import { PartialType } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsBoolean, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreateBuildingDto {
-  /** Nombre único del edificio */
+  @ApiProperty({ description: 'Unique building name' })
   @IsString()
   @IsNotEmpty()
   @MaxLength(150)
-  name: string;
+  name!: string;
 
   @IsOptional()
   @IsString()
@@ -16,14 +16,14 @@ export class CreateBuildingDto {
 }
 
 export class UpdateBuildingDto extends PartialType(CreateBuildingDto) {
-  /** false para inactivar (no se borra) */
+  @ApiPropertyOptional({ description: 'false deactivates the building without deleting it' })
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 }
 
 export class ListBuildingsQueryDto {
-  /** true para incluir también los inactivos */
+  @ApiPropertyOptional({ description: 'true also returns inactive buildings' })
   @IsOptional()
   @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()

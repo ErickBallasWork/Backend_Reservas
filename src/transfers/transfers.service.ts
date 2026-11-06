@@ -9,53 +9,58 @@ import {
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { CatalogLookupService } from '../catalog/catalog-lookup.service';
-import { Status, TransferStatus } from '../common/constants';
+import { ResourceType, Status, TransferStatus } from '../common/constants';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { isUniqueViolation } from '../common/db.types';
 import { formatDate } from '../common/format';
 import { toSkipTake } from '../common/pagination.dto';
+import { AppConfigService } from '../config/app-config.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { reservationLabel, ReservationsService } from '../reservations/reservations.service';
+import { resolveAttendees } from '../reservations/attendees-rule';
+import { describeResource } from '../reservations/reservation-resources';
+import { ReservationsService } from '../reservations/reservations.service';
 import { SanctionsService } from '../sanctions/sanctions.service';
-import { CreateTransferRequestDto, RespondTransferDto, TransferListQueryDto } from './dto/transfer.dto';
+import {
+  CreateTransferRequestDto,
+  RespondTransferDto,
+  TransferListQueryDto,
+} from './dto/transfer.dto';
 import { closePendingTransfers } from './transfer-helpers';
 
-// Lo que se devuelve de cada solicitud: quién la pide, por qué, y la reserva pedida.
 const TRANSFER_INCLUDE = {
   requester: { select: { id: true, fullName: true, email: true, department: true } },
   reservation: {
     select: {
       id: true,
-      userId: true,
       purpose: true,
       startDateTime: true,
       endDateTime: true,
       status: true,
       resource: {
-        select: { id: true, name: true, type: true, building: { select: { id: true, name: true } } },
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          building: { select: { id: true, name: true } },
+        },
       },
       user: { select: { id: true, fullName: true, email: true } },
     },
   },
 } satisfies Prisma.TransferRequestInclude;
 
-// Para cargar una solicitud con lo necesario para responderla.
 const TRANSFER_WITH_RESERVATION = {
   reservation: { include: { resource: { include: { parent: true } } } },
 } satisfies Prisma.TransferRequestInclude;
 
-/** Mientras está pendiente, quien pidió no ve quién tiene la reserva (privacidad). */
-function hideOwnerWhilePending<T extends { status: string; reservation: { user: unknown } }>(item: T) {
+function hideOwnerWhilePending<T extends { status: string; reservation: { user: unknown } }>(
+  item: T,
+) {
   if (item.status !== TransferStatus.PENDING) return item;
   return { ...item, reservation: { ...item.reservation, user: null } };
 }
 
-/**
- * Cesión de reservas entre asociados. Una persona pide una reserva ocupada explicando por qué;
- * el dueño recibe el aviso y acepta o rechaza. Si acepta, en una sola transacción su reserva
- * pasa a TRANSFERRED y se crea la reserva de quien la pidió con el mismo recurso y horario.
- */
 @Injectable()
 export class TransfersService {
   constructor(
@@ -65,9 +70,14 @@ export class TransfersService {
     private readonly sanctions: SanctionsService,
     private readonly notifications: NotificationsService,
     private readonly audit: AuditService,
+    private readonly appConfig: AppConfigService,
   ) {}
 
-  /** Pedir una reserva ocupada. La justificación le llega al dueño en el aviso. */
+  private when(start: Date, end: Date) {
+    const { timeZone } = this.appConfig.server;
+    return `(del ${formatDate(start, timeZone)} al ${formatDate(end, timeZone)})`;
+  }
+
   async request(requester: CurrentUserData, reservationId: string, dto: CreateTransferRequestDto) {
     const reservation = await this.prisma.reservation.findUnique({
       where: { id: reservationId },
@@ -80,7 +90,10 @@ export class TransfersService {
       });
     }
     if (reservation.userId === requester.id) {
-      throw new UnprocessableEntityException({ code: 'OWN_RESERVATION', message: 'Esta reserva ya es tuya' });
+      throw new UnprocessableEntityException({
+        code: 'OWN_RESERVATION',
+        message: 'Esta reserva ya es tuya',
+      });
     }
     if (reservation.status !== Status.CONFIRMED) {
       throw new UnprocessableEntityException({
@@ -89,10 +102,23 @@ export class TransfersService {
       });
     }
     if (reservation.startDateTime.getTime() <= Date.now()) {
-      throw new UnprocessableEntityException({ code: 'ALREADY_STARTED', message: 'La reserva ya empezó' });
+      throw new UnprocessableEntityException({
+        code: 'ALREADY_STARTED',
+        message: 'La reserva ya empezó',
+      });
     }
 
-    // Mismas condiciones que para reservar: sin sanción activa.
+    let attendees: number | null = null;
+    try {
+      attendees = resolveAttendees(
+        reservation.resource.type as ResourceType,
+        dto.attendees,
+        reservation.resource.capacity,
+      );
+    } catch (error) {
+      ReservationsService.toHttpError(error);
+    }
+
     await this.sanctions.processNoShows({ userId: requester.id });
     await this.sanctions.assertNoActiveSanction(requester.id);
 
@@ -106,27 +132,28 @@ export class TransfersService {
       });
     }
 
-    const justification = dto.justification.trim();
-    const label = reservationLabel(reservation.resource);
+    const label = describeResource(reservation.resource);
     const created = await this.prisma.$transaction(async (tx) => {
       const transfer = await tx.transferRequest.create({
         data: {
           reservationId,
           requesterId: requester.id,
           purpose: dto.purpose,
-          justification,
+          justification: dto.justification,
+          attendees,
           status: TransferStatus.PENDING,
         },
       });
       await this.notifications.notify(
         {
           userId: reservation.userId,
+          reservationId,
           type: 'TRANSFER_REQUESTED',
           title: 'Te piden ceder una reserva',
           message:
             `${requester.fullName} (${requester.email}) necesita ${label} ` +
-            `(del ${formatDate(reservation.startDateTime)} al ${formatDate(reservation.endDateTime)}). ` +
-            `Motivo: ${justification}`,
+            `${this.when(reservation.startDateTime, reservation.endDateTime)}. ` +
+            `Motivo: ${dto.justification}`,
         },
         tx,
       );
@@ -136,7 +163,12 @@ export class TransfersService {
           action: 'TRANSFER_REQUESTED',
           entity: 'TransferRequest',
           entityId: transfer.id,
-          details: { reservationId, purpose: dto.purpose, justification },
+          details: {
+            reservationId,
+            purpose: dto.purpose,
+            justification: dto.justification,
+            attendees,
+          },
         },
         tx,
       );
@@ -145,7 +177,6 @@ export class TransfersService {
     return hideOwnerWhilePending(await this.getById(created.id));
   }
 
-  /** Solicitudes que llegaron por mis reservas (yo decido). */
   async received(owner: CurrentUserData, query: TransferListQueryDto) {
     const where: Prisma.TransferRequestWhereInput = {
       reservation: { userId: owner.id },
@@ -163,7 +194,6 @@ export class TransfersService {
     return { total, page: query.page, pageSize: query.pageSize, items };
   }
 
-  /** Solicitudes que yo envié. */
   async sent(requester: CurrentUserData, query: TransferListQueryDto) {
     const where: Prisma.TransferRequestWhereInput = {
       requesterId: requester.id,
@@ -178,10 +208,14 @@ export class TransfersService {
       }),
       this.prisma.transferRequest.count({ where }),
     ]);
-    return { total, page: query.page, pageSize: query.pageSize, items: items.map(hideOwnerWhilePending) };
+    return {
+      total,
+      page: query.page,
+      pageSize: query.pageSize,
+      items: items.map(hideOwnerWhilePending),
+    };
   }
 
-  /** El dueño cede su reserva: la suya queda TRANSFERRED y se crea la de quien la pidió. */
   async accept(owner: CurrentUserData, id: string, dto: RespondTransferDto) {
     const transfer = await this.findPendingForOwner(owner, id);
     const { reservation } = transfer;
@@ -192,10 +226,12 @@ export class TransfersService {
       });
     }
     if (reservation.startDateTime.getTime() <= Date.now()) {
-      throw new UnprocessableEntityException({ code: 'ALREADY_STARTED', message: 'La reserva ya empezó' });
+      throw new UnprocessableEntityException({
+        code: 'ALREADY_STARTED',
+        message: 'La reserva ya empezó',
+      });
     }
 
-    // Quien la recibe debe seguir activo y sin sanción.
     const requester = await this.prisma.user.findUnique({
       where: { id: transfer.requesterId },
       select: { id: true, fullName: true, isActive: true },
@@ -206,63 +242,98 @@ export class TransfersService {
     if (!requester || !requester.isActive || activeSanctions > 0) {
       throw new UnprocessableEntityException({
         code: 'REQUESTER_BLOCKED',
-        message: 'Quien pidió la reserva está desactivado o tiene una sanción activa; no se le puede ceder',
+        message:
+          'Quien pidió la reserva está desactivado o tiene una sanción activa; no se le puede ceder',
       });
     }
 
-    // El recurso, su edificio y su laboratorio deben seguir activos.
     const resource = await this.lookup.getActiveResource(reservation.resourceId);
-    const label = reservationLabel(reservation.resource);
-    const comment = dto.comment?.trim() || null;
+    let attendees: number | null = null;
+    try {
+      attendees = resolveAttendees(
+        resource.type as ResourceType,
+        transfer.attendees ?? undefined,
+        resource.capacity,
+      );
+    } catch (error) {
+      ReservationsService.toHttpError(error);
+    }
+
+    const label = describeResource(reservation.resource);
+    const comment = dto.comment || null;
     const start = reservation.startDateTime;
     const end = reservation.endDateTime;
 
     try {
       await this.prisma.$transaction(
         async (tx) => {
-          // 1) La solicitud sigue pendiente (si dos procesos responden a la vez, solo pasa uno).
           const accepted = await tx.transferRequest.updateMany({
             where: { id, status: TransferStatus.PENDING },
-            data: { status: TransferStatus.ACCEPTED, responseComment: comment, respondedAt: new Date() },
+            data: {
+              status: TransferStatus.ACCEPTED,
+              responseComment: comment,
+              respondedAt: new Date(),
+            },
           });
           if (accepted.count === 0) {
-            throw new ConflictException({ code: 'NOT_PENDING', message: 'La solicitud ya fue respondida o retirada' });
+            throw new ConflictException({
+              code: 'NOT_PENDING',
+              message: 'La solicitud ya fue respondida o retirada',
+            });
           }
 
-          // 2) La reserva del dueño sigue confirmada (no la canceló ni la movieron mientras tanto).
           const ceded = await tx.reservation.updateMany({
             where: { id: reservation.id, status: Status.CONFIRMED },
             data: { status: Status.TRANSFERRED },
           });
           if (ceded.count === 0) {
-            throw new ConflictException({ code: 'RESERVATION_CHANGED', message: 'La reserva cambió; ya no se puede ceder' });
+            throw new ConflictException({
+              code: 'RESERVATION_CHANGED',
+              message: 'La reserva cambió; ya no se puede ceder',
+            });
           }
 
-          // 3) Libera las franjas del dueño y crea la reserva nueva con el mismo recurso y horario.
           await tx.reservationSlot.deleteMany({ where: { reservationId: reservation.id } });
+          await this.notifications.resolveForReservation(
+            reservation.id,
+            ['RESERVATION_REMINDER'],
+            tx,
+          );
           const created = await this.reservations.createInTx(
             tx,
             requester,
-            { resource, start, end, purpose: transfer.purpose, justification: transfer.justification },
-            { notifyOwner: false, auditDetails: { transferRequestId: id, fromReservationId: reservation.id } },
+            {
+              resource,
+              start,
+              end,
+              purpose: transfer.purpose,
+              justification: transfer.justification,
+              attendees,
+            },
+            {
+              notifyOwner: false,
+              auditDetails: { transferRequestId: id, fromReservationId: reservation.id },
+            },
           );
-          await tx.transferRequest.update({ where: { id }, data: { newReservationId: created.id } });
+          await tx.transferRequest.update({
+            where: { id },
+            data: { newReservationId: created.id },
+          });
 
-          // 4) Las demás personas que pedían la misma reserva se enteran de que ya no está disponible.
           await closePendingTransfers(tx, this.notifications, reservation.id, {
             title: 'La reserva que pediste se cedió a otra persona',
             message: `${label} ya no está disponible en ese horario: su dueño la cedió a otra persona.`,
           });
 
-          // 5) Avisos y auditoría.
           const waitsForLeader = created.status === Status.PENDING_APPROVAL;
           await this.notifications.notify(
             {
               userId: requester.id,
+              reservationId: created.id,
               type: 'TRANSFER_ACCEPTED',
               title: 'Te cedieron la reserva',
               message:
-                `${owner.fullName} te cedió ${label} (del ${formatDate(start)} al ${formatDate(end)}). ` +
+                `${owner.fullName} te cedió ${label} ${this.when(start, end)}. ` +
                 (waitsForLeader
                   ? 'Como es un entrenamiento, espera la aprobación del Líder de Conocimiento.'
                   : 'Tu reserva quedó confirmada.') +
@@ -276,7 +347,11 @@ export class TransfersService {
               action: 'RESERVATION_TRANSFERRED',
               entity: 'Reservation',
               entityId: reservation.id,
-              details: { toUserId: requester.id, newReservationId: created.id, transferRequestId: id },
+              details: {
+                toUserId: requester.id,
+                newReservationId: created.id,
+                transferRequestId: id,
+              },
             },
             tx,
           );
@@ -306,26 +381,32 @@ export class TransfersService {
     return this.getById(id);
   }
 
-  /** El dueño no cede su reserva. El motivo es obligatorio y le llega a quien la pidió. */
   async reject(owner: CurrentUserData, id: string, dto: RespondTransferDto) {
-    const comment = dto.comment?.trim();
+    const comment = dto.comment;
     if (!comment) {
       throw new BadRequestException({
-        code: 'COMMENT_REQUIRED',
+        code: 'COMMENTS_REQUIRED',
         message: 'Para rechazar escribe el motivo; le llegará a quien te pidió la reserva',
       });
     }
     const transfer = await this.findPendingForOwner(owner, id);
     const { reservation } = transfer;
-    const label = reservationLabel(reservation.resource);
+    const label = describeResource(reservation.resource);
 
     await this.prisma.$transaction(async (tx) => {
       const rejected = await tx.transferRequest.updateMany({
         where: { id, status: TransferStatus.PENDING },
-        data: { status: TransferStatus.REJECTED, responseComment: comment, respondedAt: new Date() },
+        data: {
+          status: TransferStatus.REJECTED,
+          responseComment: comment,
+          respondedAt: new Date(),
+        },
       });
       if (rejected.count === 0) {
-        throw new ConflictException({ code: 'NOT_PENDING', message: 'La solicitud ya fue respondida o retirada' });
+        throw new ConflictException({
+          code: 'NOT_PENDING',
+          message: 'La solicitud ya fue respondida o retirada',
+        });
       }
       await this.notifications.notify(
         {
@@ -333,8 +414,8 @@ export class TransfersService {
           type: 'TRANSFER_REJECTED',
           title: 'No te cedieron la reserva',
           message:
-            `${owner.fullName} no puede cederte ${label} (del ${formatDate(reservation.startDateTime)} ` +
-            `al ${formatDate(reservation.endDateTime)}). Motivo: ${comment}`,
+            `${owner.fullName} no puede cederte ${label} ` +
+            `${this.when(reservation.startDateTime, reservation.endDateTime)}. Motivo: ${comment}`,
         },
         tx,
       );
@@ -353,22 +434,30 @@ export class TransfersService {
     return this.getById(id);
   }
 
-  /** Quien pidió la reserva retira su solicitud. */
   async cancel(requester: CurrentUserData, id: string) {
     const transfer = await this.prisma.transferRequest.findUnique({
       where: { id },
       include: TRANSFER_WITH_RESERVATION,
     });
     if (!transfer) {
-      throw new NotFoundException({ code: 'TRANSFER_NOT_FOUND', message: `No existe la solicitud ${id}` });
+      throw new NotFoundException({
+        code: 'TRANSFER_NOT_FOUND',
+        message: `No existe la solicitud ${id}`,
+      });
     }
     if (transfer.requesterId !== requester.id) {
-      throw new ForbiddenException({ code: 'NOT_REQUESTER', message: 'Solo quien hizo la solicitud puede retirarla' });
+      throw new ForbiddenException({
+        code: 'NOT_REQUESTER',
+        message: 'Solo quien hizo la solicitud puede retirarla',
+      });
     }
     if (transfer.status !== TransferStatus.PENDING) {
-      throw new ConflictException({ code: 'NOT_PENDING', message: 'La solicitud ya fue respondida o retirada' });
+      throw new ConflictException({
+        code: 'NOT_PENDING',
+        message: 'La solicitud ya fue respondida o retirada',
+      });
     }
-    const label = reservationLabel(transfer.reservation.resource);
+    const label = describeResource(transfer.reservation.resource);
 
     await this.prisma.$transaction(async (tx) => {
       const cancelled = await tx.transferRequest.updateMany({
@@ -376,11 +465,15 @@ export class TransfersService {
         data: { status: TransferStatus.CANCELLED, respondedAt: new Date() },
       });
       if (cancelled.count === 0) {
-        throw new ConflictException({ code: 'NOT_PENDING', message: 'La solicitud ya fue respondida o retirada' });
+        throw new ConflictException({
+          code: 'NOT_PENDING',
+          message: 'La solicitud ya fue respondida o retirada',
+        });
       }
       await this.notifications.notify(
         {
           userId: transfer.reservation.userId,
+          reservationId: transfer.reservationId,
           type: 'TRANSFER_CANCELLED',
           title: 'Retiraron una solicitud de cesión',
           message: `${requester.fullName} ya no necesita ${label}; no tienes que responder.`,
@@ -388,7 +481,12 @@ export class TransfersService {
         tx,
       );
       await this.audit.log(
-        { userId: requester.id, action: 'TRANSFER_CANCELLED', entity: 'TransferRequest', entityId: id },
+        {
+          userId: requester.id,
+          action: 'TRANSFER_CANCELLED',
+          entity: 'TransferRequest',
+          entityId: id,
+        },
         tx,
       );
     });
@@ -396,14 +494,16 @@ export class TransfersService {
     return hideOwnerWhilePending(await this.getById(id));
   }
 
-  /** Carga una solicitud pendiente y comprueba que quien responde sea el dueño de la reserva. */
   private async findPendingForOwner(owner: CurrentUserData, id: string) {
     const transfer = await this.prisma.transferRequest.findUnique({
       where: { id },
       include: TRANSFER_WITH_RESERVATION,
     });
     if (!transfer) {
-      throw new NotFoundException({ code: 'TRANSFER_NOT_FOUND', message: `No existe la solicitud ${id}` });
+      throw new NotFoundException({
+        code: 'TRANSFER_NOT_FOUND',
+        message: `No existe la solicitud ${id}`,
+      });
     }
     if (transfer.reservation.userId !== owner.id) {
       throw new ForbiddenException({
@@ -412,15 +512,24 @@ export class TransfersService {
       });
     }
     if (transfer.status !== TransferStatus.PENDING) {
-      throw new ConflictException({ code: 'NOT_PENDING', message: 'La solicitud ya fue respondida o retirada' });
+      throw new ConflictException({
+        code: 'NOT_PENDING',
+        message: 'La solicitud ya fue respondida o retirada',
+      });
     }
     return transfer;
   }
 
   private async getById(id: string) {
-    const transfer = await this.prisma.transferRequest.findUnique({ where: { id }, include: TRANSFER_INCLUDE });
+    const transfer = await this.prisma.transferRequest.findUnique({
+      where: { id },
+      include: TRANSFER_INCLUDE,
+    });
     if (!transfer) {
-      throw new NotFoundException({ code: 'TRANSFER_NOT_FOUND', message: `No existe la solicitud ${id}` });
+      throw new NotFoundException({
+        code: 'TRANSFER_NOT_FOUND',
+        message: `No existe la solicitud ${id}`,
+      });
     }
     return transfer;
   }

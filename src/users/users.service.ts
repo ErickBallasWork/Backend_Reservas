@@ -1,16 +1,41 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
-import { USER_WITH_ROLES } from '../auth/current-user.mapper';
+import { MANAGER_ROLES, type Role } from '../common/constants';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateUserDto, RoleAssignmentDto, UpdateUserDto } from './dto/user.dto';
+import { UpdateUserDto } from './dto/user.dto';
+import { RoleRowsService } from './role-rows.service';
+import { assertCanManageRoles, removesSuperadminAccess } from './role-assignment.policy';
+
+const USER_WITH_BUILDINGS = {
+  roles: { include: { role: true, building: { select: { name: true } } } },
+} satisfies Prisma.UserInclude;
+
+type UserWithBuildings = Prisma.UserGetPayload<{ include: typeof USER_WITH_BUILDINGS }>;
+
+function toUserResponse(user: UserWithBuildings) {
+  return {
+    id: user.id,
+    email: user.email,
+    fullName: user.fullName,
+    department: user.department,
+    isActive: user.isActive,
+    lastLoginAt: user.lastLoginAt,
+    roles: user.roles.map((r) => ({
+      role: r.role.name as Role,
+      buildingId: r.buildingId,
+      building: r.building?.name ?? null,
+    })),
+  };
+}
 
 @Injectable()
 export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly roleRows: RoleRowsService,
   ) {}
 
   async me(user: CurrentUserData) {
@@ -21,97 +46,33 @@ export class UsersService {
     return { ...user, activeSanction };
   }
 
-  listRoles() {
-    return this.prisma.role.findMany({ orderBy: { id: 'asc' } });
+  async listRoles() {
+    const roles = await this.prisma.role.findMany({ orderBy: { id: 'asc' } });
+    return roles.map((role) => ({ id: role.id, name: role.name as Role }));
   }
 
   async list() {
     const users = await this.prisma.user.findMany({
-      include: { roles: { include: { role: true, building: { select: { name: true } } } } },
+      include: USER_WITH_BUILDINGS,
       orderBy: { fullName: 'asc' },
     });
-    return users.map((u) => ({
-      id: u.id,
-      email: u.email,
-      fullName: u.fullName,
-      department: u.department,
-      isActive: u.isActive,
-      lastLoginAt: u.lastLoginAt,
-      roles: u.roles.map((r) => ({
-        role: r.role.name,
-        buildingId: r.buildingId,
-        building: r.building?.name ?? null,
-      })),
-    }));
+    return users.map(toUserResponse);
   }
 
-  /** Convierte la lista de roles pedida en filas de USER_ROLE (valida rol y edificio). */
-  private async toRoleRows(roles: RoleAssignmentDto[]) {
-    const all = await this.prisma.role.findMany();
-    const idByName = new Map<string, number>(all.map((r) => [r.name, r.id]));
-    const rows: { roleId: number; buildingId: string | null }[] = [];
-    for (const r of roles) {
-      const roleId = idByName.get(r.role);
-      if (roleId === undefined) {
-        throw new BadRequestException({
-          code: 'ROLE_NOT_FOUND',
-          message: `El rol ${r.role} no existe. ¿Corriste el seed?`,
-        });
-      }
-      let buildingId: string | null = null;
-      if (r.role === 'SPOC_EDIFICIO') {
-        if (!r.buildingId) {
-          throw new BadRequestException({
-            code: 'BUILDING_REQUIRED',
-            message: 'El rol SPOC_EDIFICIO necesita buildingId',
-          });
-        }
-        const building = await this.prisma.building.findUnique({ where: { id: r.buildingId } });
-        if (!building) {
-          throw new NotFoundException({
-            code: 'BUILDING_NOT_FOUND',
-            message: `No existe el edificio ${r.buildingId}`,
-          });
-        }
-        buildingId = building.id;
-      }
-      rows.push({ roleId, buildingId });
-    }
-    return rows;
-  }
-
-  /** El Administrador da de alta a un usuario antes de que entre (útil con AUTO_CREATE_USERS=false). */
-  async create(admin: CurrentUserData, dto: CreateUserDto) {
-    const roles: RoleAssignmentDto[] = dto.roles ?? [{ role: 'ASOCIADO' }];
-    const rows = await this.toRoleRows(roles);
-    const user = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.user.create({
-        data: {
-          email: dto.email.trim().toLowerCase(),
-          fullName: dto.fullName.trim(),
-          department: dto.department?.trim(),
-        },
-      });
-      await tx.userRole.createMany({ data: rows.map((r) => ({ ...r, userId: created.id })) });
-      await this.audit.log(
-        {
-          userId: admin.id,
-          action: 'USER_CREATED',
-          entity: 'User',
-          entityId: created.id,
-          details: { email: created.email, roles },
-        },
-        tx,
-      );
-      return created;
-    });
-    return this.get(user.id);
-  }
-
-  /** Activar o desactivar, cambiar departamento y asignar roles (HU de asignación de roles). */
   async update(admin: CurrentUserData, id: string, dto: UpdateUserDto) {
     const before = await this.get(id);
-    const rows = dto.roles ? await this.toRoleRows(dto.roles) : null;
+    const beforeRoles = before.roles.map((r) => r.role.name);
+    const requestedRoles = dto.roles?.map((r) => r.role);
+    assertCanManageRoles(admin.roles, beforeRoles, requestedRoles);
+    await this.assertKeepsASuperadmin(
+      id,
+      { isActive: before.isActive, roles: beforeRoles },
+      {
+        isActive: dto.isActive,
+        roles: requestedRoles,
+      },
+    );
+    const rows = dto.roles ? await this.roleRows.resolve(dto.roles) : null;
 
     await this.prisma.$transaction(async (tx) => {
       if (rows) {
@@ -122,6 +83,15 @@ export class UsersService {
       if (dto.isActive !== undefined) data.isActive = dto.isActive;
       if (dto.department !== undefined) data.department = dto.department.trim();
       await tx.user.update({ where: { id }, data });
+      if (requestedRoles && !requestedRoles.some((role) => MANAGER_ROLES.includes(role))) {
+        await tx.managedAssociate.deleteMany({ where: { managerId: id } });
+      }
+      if (dto.isActive === false) {
+        await tx.device.updateMany({
+          where: { userId: id, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      }
       await this.audit.log(
         {
           userId: admin.id,
@@ -136,13 +106,33 @@ export class UsersService {
         tx,
       );
     });
-    return this.get(id);
+    return toUserResponse(await this.get(id));
+  }
+
+  private async assertKeepsASuperadmin(
+    id: string,
+    before: { isActive: boolean; roles: string[] },
+    change: { isActive?: boolean; roles?: string[] },
+  ) {
+    if (!removesSuperadminAccess(before, change)) return;
+    const others = await this.prisma.user.count({
+      where: { id: { not: id }, isActive: true, roles: { some: { role: { name: 'SUPERADMIN' } } } },
+    });
+    if (others === 0) {
+      throw new ConflictException({
+        code: 'LAST_SUPERADMIN',
+        message: 'Debe quedar al menos un SUPERADMIN activo',
+      });
+    }
   }
 
   private async get(id: string) {
-    const user = await this.prisma.user.findUnique({ where: { id }, include: USER_WITH_ROLES });
+    const user = await this.prisma.user.findUnique({ where: { id }, include: USER_WITH_BUILDINGS });
     if (!user) {
-      throw new NotFoundException({ code: 'USER_NOT_FOUND', message: `No existe el usuario ${id}` });
+      throw new NotFoundException({
+        code: 'USER_NOT_FOUND',
+        message: `No existe el usuario ${id}`,
+      });
     }
     return user;
   }

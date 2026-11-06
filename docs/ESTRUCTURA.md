@@ -4,62 +4,73 @@ Guía rápida del proyecto. Si solo vas a leer una parte, lee **"Cómo viaja una
 
 ## Archivos de la raíz
 
-| Archivo | Para qué sirve | ¿Lo tocas? |
-| --- | --- | --- |
-| `package.json` | Lista de librerías (dependencias) y **comandos** (`npm run ...`). También le dice a Prisma cómo correr el seed. | Solo para añadir librerías o comandos |
-| `package-lock.json` | Aparece con `npm install`. Fija la versión exacta de cada librería para que todos tengan lo mismo. **Se sube al repo.** | No a mano |
-| `tsconfig.json` | Configuración de TypeScript (cómo se compila el código). | No |
-| `tsconfig.build.json` | Igual, pero para `npm run build`: deja fuera pruebas y carpeta `prisma`. | No |
-| `nest-cli.json` | Configuración de la CLI de Nest. Activa el plugin de Swagger que documenta los DTO solo. | No |
-| `.env.example` | Plantilla de variables de entorno, **sin secretos reales**. Se sube al repo. | Cuando añades una variable nueva |
-| `.env` | Tu copia real con contraseñas y secretos. **Nunca se sube** (está en `.gitignore`). | Sí, es tu configuración local |
-| `.gitignore` | Lo que Git ignora: `node_modules`, `dist`, `.env`... | Rara vez |
-| `.prettierrc` | Reglas de formato (comillas, ancho de línea). VS Code formatea al guardar con la extensión Prettier. | No |
-| `README.md` | Resumen y comandos para arrancar. | Cuando cambie algo importante |
-| `azure-pipelines.yml` | **CI en Azure DevOps**: en cada push a `develop` o `main` instala, corre pruebas, compila y revisa vulnerabilidades. | Cuando DevOps lo pida |
+| Archivo                  | Para qué sirve                                                                                                  | ¿Lo tocas?                            |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `package.json`           | Librerías, **comandos** (`npm run ...`), `engines` (Node 22) y la configuración de `lint-staged`.               | Solo para añadir librerías o comandos |
+| `package-lock.json`      | Versión exacta de cada librería. Se genera con npm 10 (el de Node 22). **Se sube al repo.**                     | No a mano                             |
+| `.nvmrc`                 | Versión de Node del proyecto (22). `nvm use` la activa.                                                         | No                                    |
+| `tsconfig.json`          | Configuración de TypeScript en modo `strict`.                                                                   | No                                    |
+| `tsconfig.build.json`    | Igual, pero para `npm run build`: deja fuera pruebas y la carpeta `prisma`.                                     | No                                    |
+| `nest-cli.json`          | Configuración de la CLI de Nest. Activa el plugin de Swagger que documenta los DTO.                             | No                                    |
+| `eslint.config.mjs`      | Reglas de ESLint (TypeScript con tipos, sin `any`, imports de tipos, sin `console` fuera de `prisma/`).         | Rara vez                              |
+| `.prettierrc`            | Formato: comillas simples, coma final, 100 columnas, fin de línea LF. Igual que en el frontend.                 | No                                    |
+| `.prettierignore`        | Lo que Prettier no formatea (migraciones, `dist`, lockfile).                                                    | Rara vez                              |
+| `.editorconfig`          | Indentación y fin de línea para cualquier editor.                                                               | No                                    |
+| `.gitattributes`         | Fuerza fin de línea LF en el repo, también en Windows.                                                          | No                                    |
+| `.git-blame-ignore-revs` | Commits de solo formato que `git blame` debe saltar (`git config blame.ignoreRevsFile .git-blame-ignore-revs`). | Al hacer un commit de formato masivo  |
+| `commitlint.config.mjs`  | Exige Conventional Commits en cada mensaje.                                                                     | No                                    |
+| `.husky/`                | Hooks de git: `pre-commit` corre `lint-staged` y `commit-msg` corre `commitlint`.                               | No                                    |
+| `.env.example`           | Plantilla de variables de entorno, **sin secretos reales**. Se sube al repo.                                    | Cuando añades una variable nueva      |
+| `.env`                   | Tu copia real con contraseñas y secretos. **Nunca se sube** (está en `.gitignore`).                             | Sí, es tu configuración local         |
+| `.gitignore`             | Lo que Git ignora: `node_modules`, `dist`, `.env`, archivos de Claude...                                        | Rara vez                              |
+| `README.md`              | Arranque, variables de entorno, comandos y despliegue.                                                          | Cuando cambie algo importante         |
 
-## Archivos de Docker
+## Docker y CI
 
-Docker corre programas dentro de "contenedores": cajas aisladas que traen todo lo que necesitan. Aquí se usa
-para tener SQL Server en tu PC sin instalarlo, y para empaquetar la API como se publicará en Azure.
+| Archivo                        | Para qué sirve                                                                                                                                                                            |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Dockerfile`                   | **Imagen de la API** para Azure App Service. Etapa 1: instala, genera Prisma y compila. Etapa 2: copia solo lo necesario, corre como usuario sin privilegios y escucha en el puerto 3001. |
+| `docker/start.sh`              | Comando de arranque del contenedor: `prisma migrate deploy` con reintentos y luego la API.                                                                                                |
+| `.dockerignore`                | Lo que no se copia a la imagen (`node_modules`, `.env`, `.git`, docs...). Evita meter secretos en la imagen.                                                                              |
+| `.github/workflows/ci.yml`     | Quality gate: lint, formato, typecheck, tests, build y construcción de la imagen. Corre en PR a `develop` y `main` y en push a `develop`.                                                 |
+| `.github/workflows/deploy.yml` | En push a `main`: repite el quality gate, publica la imagen en GHCR (etiqueta del commit y `latest`) y la despliega en App Service.                                                       |
 
-| Archivo | Para qué sirve |
-| --- | --- |
-| `docker-compose.yml` | **Tu base de datos local.** Define el servicio `db` (SQL Server 2022, puerto 1433) y un volumen `sqldata` donde quedan guardados los datos aunque apagues el contenedor. `npm run db:up` lo enciende. Tiene un segundo servicio opcional, `api`, que solo arranca con `docker compose --profile completo up -d --build` para probar la API dentro de Docker. |
-| `Dockerfile` | **Receta de la imagen de la API** para Azure Container Apps. Etapa 1: instala, genera Prisma y compila. Etapa 2: copia solo lo necesario a una imagen limpia y la corre como usuario sin privilegios. Para la base local **no** lo necesitas. |
-| `.dockerignore` | Lo que no se copia a la imagen (`node_modules`, `.env`, `.git`...). Evita meter secretos en la imagen. |
-
-Conceptos: **imagen** = la plantilla (por ejemplo `mssql/server:2022-latest`); **contenedor** = una imagen
-encendida; **volumen** = disco del contenedor que sobrevive cuando lo apagas o lo borras.
+La base de datos local no está en este repo: el `docker-compose.yml` vive en el workspace
+(`reservation_system/`) y solo levanta SQL Server.
 
 ## `prisma/` — la base de datos
 
-| Archivo | Para qué sirve |
-| --- | --- |
-| `schema.prisma` | **El modelo de datos**: cada `model` es una tabla (`Reservation` → `RESERVATION`). De aquí Prisma genera las tablas y el cliente tipado que usa el código. |
-| `seed.ts` | Datos de ejemplo: 5 roles, 2 edificios, 4 salas, 1 laboratorio con 5 laptops y 5 usuarios demo. Se puede correr varias veces. |
-| `migrations/` | **Aparece** tras el primer `npm run db:migrate`. Cada subcarpeta tiene un `migration.sql` con los cambios exactos de la base. **Se sube al repo**: así Azure se crea igual que tu base local (`npm run db:deploy`). No edites migraciones ya subidas. |
+| Archivo               | Para qué sirve                                                                                                                                |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schema.prisma`       | **El modelo de datos**: cada `model` es una tabla (`Reservation` → `RESERVATION`). De aquí Prisma genera las migraciones y el cliente tipado. |
+| `migrations/`         | Cada subcarpeta tiene un `migration.sql` con los cambios exactos de la base. **Se sube al repo** y no se editan las ya aplicadas.             |
+| `seed.ts`             | Datos obligatorios (también en producción): los 6 roles y el SUPERADMIN inicial (`INITIAL_SUPERADMIN_EMAIL`).                                 |
+| `seed-demo.ts`        | Datos demo: 2 edificios, 4 salas, 1 laboratorio con 5 laptops y 5 usuarios. Se puede repetir y no corre en producción.                        |
+| `seed-environment.ts` | Lee y valida las variables que usan los seeds.                                                                                                |
 
 ## `src/` — el código
 
 ### Arranque
 
-| Archivo | Para qué sirve |
-| --- | --- |
-| `main.ts` | Enciende la API: prefijo `/api/v1`, cabeceras de seguridad (helmet), CORS solo para el frontend, validación de datos, formato único de errores y Swagger en `/api/docs`. Se niega a arrancar en producción con modo demo. |
-| `app.module.ts` | Une todos los módulos. Si creas un módulo nuevo, se registra aquí. |
+| Archivo         | Para qué sirve                                                                                                                                        |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `main.ts`       | Enciende la API: prefijo `/api/v1`, cabeceras de seguridad (helmet), CORS de `CORS_ORIGINS`, validación de datos, formato único de errores y Swagger. |
+| `swagger.ts`    | Arma la documentación en `/api/docs`, con la versión de `package.json`.                                                                               |
+| `app.module.ts` | Une todos los módulos. Si creas un módulo nuevo, se registra aquí.                                                                                    |
 
 ### Carpetas transversales
 
-| Carpeta | Para qué sirve |
-| --- | --- |
-| `config/` | `reservation-rules.ts`: reglas de reserva leídas del `.env` (franjas de 30 min, 24 h de anticipación, 48 h máximo, ventana de check-in). |
-| `common/` | Piezas compartidas: `constants.ts` (roles, tipos y estados válidos), `filters/` (convierte cualquier error en `{statusCode, code, message}`), `current-user/` (decoradores `@CurrentUser()` y `@Public()`), `pagination.dto.ts`, `db.types.ts`, `format.ts` (fechas legibles), `job-key.ts` (protege las tareas programadas). |
-| `prisma/` | `PrismaService`: la conexión a la base. Reintenta si la base de Azure está despertando. |
-| `auth/` | Inicio de sesión. `auth.controller.ts` (`POST /auth/google`, `POST /auth/demo`), `google-verifier.service.ts` (verifica el token de Google), `auth.service.ts` (crea o busca el usuario y firma el JWT), `auth.guard.ts` (**guard global**: revisa el token y los roles en cada petición), `roles.decorator.ts` (`@Roles('ADMIN')`). |
-| `health/` | `GET /health`: dice si la API y la base responden. Azure lo usa para saber si el servicio está vivo. |
-| `audit/` | Registro de auditoría (`AUDIT_LOG`): quién hizo qué y cuándo. `GET /audit` solo para ADMIN. |
-| `notifications/` | Bandeja de avisos (`NOTIFICATION`). Hoy el canal es la app (IN_APP); push y e-mail quedan pendientes y se procesan con una tarea. |
+| Carpeta            | Para qué sirve                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config/`          | `environment.ts` valida las variables al arrancar, `app-config.ts` las agrupa en `server`, `auth`, `notifications` y `jobs`, y `AppConfigService` las expone tipadas (es global). `ReservationRulesService` entrega las reglas de reserva. **Nunca se lee `process.env` fuera de aquí.**                                                                                                    |
+| `common/`          | Piezas compartidas: `constants.ts` (roles, tipos y estados válidos), `filters/` (convierte cualquier error en `{statusCode, code, message}`), `current-user/` (decoradores `@CurrentUser()` y `@Public()`), `guards/` (`@JobEndpoint()` protege las tareas programadas con `x-job-key`), `pagination.dto.ts`, `db.types.ts` y `format.ts` (fechas).                                         |
+| `prisma/`          | `PrismaService`: la conexión a la base. Reintenta si la base de Azure está despertando.                                                                                                                                                                                                                                                                                                     |
+| `auth/`            | Inicio de sesión. `auth.controller.ts` (`/auth/device-session`, `/auth/refresh`, `/auth/logout` y `/auth/demo` solo en desarrollo), `session.service.ts` (firma el JWT), `devices.service.ts` (dispositivos aprobados y rotación del refresh token), `auth.guard.ts` (**guard global** de token y roles) y `roles.decorator.ts` (`@Roles('ADMIN')`; el SUPERADMIN pasa cualquier `@Roles`). |
+| `throttling/`      | Límite de peticiones por IP (`RATE_LIMITS`) y la respuesta 429 con `TOO_MANY_REQUESTS`.                                                                                                                                                                                                                                                                                                     |
+| `health/`          | `GET /health`: dice si la API y la base responden.                                                                                                                                                                                                                                                                                                                                          |
+| `access-requests/` | `POST /access-requests`, `POST /access-requests/status`, `GET /access-requests`, `POST /access-requests/:id/approve` y `/reject`                                                                                                                                                                                                                                                            | Solicitudes de acceso que aprueba el SUPERADMIN |
+| `audit/`           | Registro de auditoría (`AUDIT_LOG`): quién hizo qué y cuándo. `GET /audit` solo para ADMIN.                                                                                                                                                                                                                                                                                                 |
+| `notifications/`   | Bandeja de avisos (`NOTIFICATION`). Hoy el canal es la app (IN_APP); push y e-mail quedan pendientes y se procesan con una tarea.                                                                                                                                                                                                                                                           |
 
 ### Módulos de negocio
 
@@ -70,18 +81,18 @@ Cada módulo tiene casi siempre los mismos archivos:
 - `*.service.ts`: la **lógica**: validaciones, transacciones, consultas con Prisma.
 - `dto/`: la **forma de los datos que llegan** (qué campos, de qué tipo, cuáles son obligatorios).
 
-| Carpeta | Rutas principales | Historias |
-| --- | --- | --- |
-| `users/` | `GET /me`, `GET /roles`, `GET/POST /users`, `PATCH /users/:id` | Perfil, alta de usuarios y roles |
-| `catalog/` | `/buildings`, `/resources`, `GET /catalog/tree` | HU-01 a HU-05: edificios, salas, laboratorios y laptops |
-| `availability/` | `GET /availability/search`, `GET /availability/resources/:id` | HU-06: qué está libre |
-| `reservations/` | `POST /reservations`, `GET /reservations/mine`, `GET /reservations/:id`, `PATCH .../cancel`, `POST .../check-in` | HU-07 a HU-14, HU-20 |
-| `approvals/` | `GET /approvals/pending`, `POST /approvals/:reservationId` | HU-15: el Líder aprueba entrenamientos |
-| `reallocations/` | `POST /reservations/:id/reallocate` | HU-17, HU-18: el SPOC mueve reservas de sala |
-| `sanctions/` | `GET /sanctions`, `PATCH /sanctions/:id/resolve`, `POST /sanctions/no-show/run` | HU-21, HU-22: No-Show y sanciones |
-| `transfers/` | `POST /reservations/:id/transfer-requests`, `GET /transfer-requests/received`, `GET /transfer-requests/sent`, `POST /transfer-requests/:id/accept`, `POST /transfer-requests/:id/reject`, `PATCH /transfer-requests/:id/cancel` | Cesión entre asociados: alguien pide una reserva ocupada con su justificación y el dueño acepta o rechaza |
-| `dashboard/` | `GET /dashboard/reservations`, `GET /dashboard/metrics` | HU-16: panel del SPOC Administrativo y Líder |
-| `reports/` | `GET /reports/occupancy`, `GET /reports/usage-by-department` (+ `/export` en CSV) | HU-23: reportes |
+| Carpeta          | Rutas principales                                                                                                                                                                                                               | Historias                                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `users/`         | `GET /me`, `GET /roles`, `GET /users`, `PATCH /users/:id`, `GET/PUT /users/:id/managed-associates`                                                                                                                              | Perfil, roles y asociados a cargo de SPOC Admin y Líder                                                   |
+| `catalog/`       | `/buildings`, `/resources`, `GET /catalog/tree`                                                                                                                                                                                 | HU-01 a HU-05: edificios, salas, laboratorios y laptops                                                   |
+| `availability/`  | `GET /availability/search`, `GET /availability/resources/:id`                                                                                                                                                                   | HU-06: qué está libre                                                                                     |
+| `reservations/`  | `POST /reservations`, `GET /reservations/mine`, `GET /reservations/:id`, `PATCH .../cancel`, `POST .../check-in`                                                                                                                | HU-07 a HU-14, HU-20                                                                                      |
+| `approvals/`     | `GET /approvals/pending`, `POST /approvals/:reservationId`                                                                                                                                                                      | HU-15: el Líder aprueba entrenamientos                                                                    |
+| `reallocations/` | `POST /reservations/:id/reallocate`                                                                                                                                                                                             | HU-17, HU-18: el SPOC mueve reservas de sala                                                              |
+| `sanctions/`     | `GET /sanctions`, `PATCH /sanctions/:id/resolve`, `POST /sanctions/no-show/run`                                                                                                                                                 | HU-21, HU-22: No-Show y sanciones                                                                         |
+| `transfers/`     | `POST /reservations/:id/transfer-requests`, `GET /transfer-requests/received`, `GET /transfer-requests/sent`, `POST /transfer-requests/:id/accept`, `POST /transfer-requests/:id/reject`, `PATCH /transfer-requests/:id/cancel` | Cesión entre asociados: alguien pide una reserva ocupada con su justificación y el dueño acepta o rechaza |
+| `dashboard/`     | `GET /dashboard/reservations`, `GET /dashboard/metrics`                                                                                                                                                                         | HU-16: panel del SPOC Administrativo y Líder                                                              |
+| `reports/`       | `GET /reports/occupancy`, `GET /reports/usage-by-department` (+ `/export` en CSV)                                                                                                                                               | HU-23: reportes                                                                                           |
 
 Archivos especiales de `reservations/`:
 
@@ -91,28 +102,26 @@ Archivos especiales de `reservations/`:
 
 ## `docs/` y `tools/`
 
-| Archivo | Para qué sirve |
-| --- | --- |
-| `docs/ESTRUCTURA.md` | Este archivo. |
-| `docs/frontend-login-google.md` | Lo que necesita el frontend para el botón de Google. |
+| Archivo                           | Para qué sirve                                                                                                                                                          |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/ESTRUCTURA.md`              | Este archivo.                                                                                                                                                           |
 | `docs/sql/permisos-auditoria.sql` | Para Azure (no local): crea el usuario de la app sin permiso de editar ni borrar la auditoría, y un usuario aparte para migraciones. Lo corre quien administra la base. |
-| `tools/pruebas.http` | Peticiones listas para la extensión REST Client: haz clic en "Send Request". |
-| `tools/login-google.html` | Página para probar el login con Google sin tener el frontend. |
-| `.vscode/extensions.json` | VS Code te sugiere instalar las extensiones del proyecto al abrirlo. |
+| `tools/pruebas.http`              | Peticiones listas para la extensión REST Client: haz clic en "Send Request".                                                                                            |
+| `.vscode/extensions.json`         | VS Code te sugiere instalar las extensiones del proyecto al abrirlo.                                                                                                    |
 
 ## Carpetas que aparecen solas (no se suben)
 
-| Carpeta | Qué es |
-| --- | --- |
+| Carpeta         | Qué es                                                                           |
+| --------------- | -------------------------------------------------------------------------------- |
 | `node_modules/` | Las librerías descargadas por `npm install`. Pesada; se regenera cuando quieras. |
-| `dist/` | El JavaScript compilado por `npm run build`. Es lo que corre en Azure. |
-| `coverage/` | Informe de `npm run test:cov`. |
+| `dist/`         | El JavaScript compilado por `npm run build`. Es lo que corre en Azure.           |
+| `coverage/`     | Informe de `npm run test:cov`.                                                   |
 
 ## Cómo viaja una petición
 
 Ejemplo: Ana reserva la Sala Pichincha.
 
-1. El frontend llama `POST /api/v1/reservations` con el token (o `x-demo-user` en modo demo).
+1. El frontend llama `POST /api/v1/reservations` con el token.
 2. `main.ts` aplica seguridad y valida el cuerpo contra `CreateReservationDto`. Si falta un campo → 400.
 3. `auth.guard.ts` revisa quién es y si su rol puede usar esa ruta. Si no → 401 o 403.
 4. `reservations.controller.ts` recibe la petición y llama a `ReservationsService.create()`.

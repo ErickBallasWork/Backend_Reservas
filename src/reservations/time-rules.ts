@@ -1,6 +1,3 @@
-// Reglas de tiempo y franjas. Son funciones puras (sin base de datos) para poder probarlas fácil.
-// Todas las fechas se manejan en UTC.
-
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 
@@ -20,12 +17,10 @@ export interface TimeRuleOptions {
   maxDurationHours: number;
 }
 
-/** true si la fecha cae justo en el borde de una franja (por ejemplo 10:00 o 10:30 con franjas de 30 min). */
 export function isAlignedToSlot(date: Date, slotMinutes: number): boolean {
   return date.getTime() % (slotMinutes * MINUTE) === 0;
 }
 
-/** Valida una reserva nueva o reasignada. Lanza RuleViolation con un código si algo no cumple. */
 export function validateReservationTimes(
   start: Date,
   end: Date,
@@ -61,7 +56,6 @@ export function validateReservationTimes(
   }
 }
 
-/** Inicio de cada franja entre start (incluido) y end (excluido). */
 export function buildSlotStarts(start: Date, end: Date, slotMinutes: number): Date[] {
   const step = slotMinutes * MINUTE;
   const starts: Date[] = [];
@@ -71,12 +65,20 @@ export function buildSlotStarts(start: Date, end: Date, slotMinutes: number): Da
   return starts;
 }
 
-/** Se puede cancelar si faltan al menos cancelMinHours para el inicio (RF-05). */
 export function canCancel(start: Date, now: Date, cancelMinHours: number): boolean {
   return start.getTime() - now.getTime() >= cancelMinHours * HOUR;
 }
 
-/** El check-in se acepta desde beforeMin minutos antes hasta afterMin minutos después del inicio. */
+export function canCancelReservation(
+  start: Date,
+  now: Date,
+  cancelMinHours: number,
+  reallocated: boolean,
+): boolean {
+  if (reallocated) return start.getTime() > now.getTime();
+  return canCancel(start, now, cancelMinHours);
+}
+
 export function isWithinCheckInWindow(
   start: Date,
   now: Date,
@@ -87,7 +89,6 @@ export function isWithinCheckInWindow(
   return t >= start.getTime() - beforeMin * MINUTE && t <= start.getTime() + afterMin * MINUTE;
 }
 
-/** Divide una lista en grupos (SQL Server acepta un máximo de parámetros por consulta). */
 export function chunk<T>(items: T[], size: number): T[][] {
   const groups: T[][] = [];
   for (let i = 0; i < items.length; i += size) {

@@ -1,27 +1,35 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
-import { jwtExpiresInSeconds, jwtSecret } from './auth-config';
+import { AppConfigService } from '../config/app-config.service';
 import { AuthController } from './auth.controller';
 import { AuthGuard } from './auth.guard';
 import { AuthService } from './auth.service';
-import { GoogleVerifierService } from './google-verifier.service';
+import { DevicesController } from './devices.controller';
+import { DevicesService } from './devices.service';
+import { JWT_ALGORITHM, JWT_ISSUER } from './jwt-payload';
+import { SessionService } from './session.service';
 
 @Module({
   imports: [
-    // registerAsync: el secreto se lee cuando ya está cargado el .env
     JwtModule.registerAsync({
-      useFactory: () => ({
-        secret: jwtSecret(),
-        signOptions: { expiresIn: jwtExpiresInSeconds() },
+      inject: [AppConfigService],
+      useFactory: (config: AppConfigService) => ({
+        secret: config.auth.jwtSecret,
+        signOptions: {
+          algorithm: JWT_ALGORITHM,
+          issuer: JWT_ISSUER,
+          expiresIn: config.auth.jwtExpiresInSeconds,
+        },
+        verifyOptions: { algorithms: [JWT_ALGORITHM], issuer: JWT_ISSUER },
       }),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, DevicesController],
   providers: [
     AuthService,
-    GoogleVerifierService,
-    // Guard global: toda ruta exige sesión salvo las marcadas con @Public()
+    SessionService,
+    DevicesService,
     { provide: APP_GUARD, useClass: AuthGuard },
   ],
 })
