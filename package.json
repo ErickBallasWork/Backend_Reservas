@@ -4,6 +4,9 @@
   "description": "API de reservas de salas, laboratorios de IA y laptops (NestJS + Prisma + SQL Server / Azure SQL)",
   "private": true,
   "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22 <23"
+  },
   "scripts": {
     "build": "nest build",
     "start": "nest start",
