@@ -31,7 +31,7 @@ import { resolveAttendees } from './attendees-rule';
 import { insertSlots } from './slots';
 import {
   buildSlotStarts,
-  canCancel,
+  canCancelReservation,
   isWithinCheckInWindow,
   RuleViolation,
   validateReservationTimes,
@@ -56,6 +56,14 @@ export const APPROVALS_INCLUDE = {
   orderBy: { decisionDate: 'desc' },
   include: { approver: { select: { fullName: true } } },
 } satisfies Prisma.Reservation$approvalsArgs;
+
+export const REALLOCATIONS_INCLUDE = {
+  orderBy: { reallocationDate: 'desc' },
+  include: {
+    previousResource: { select: RESERVATION_INCLUDE.resource.select },
+    newResource: { select: RESERVATION_INCLUDE.resource.select },
+  },
+} satisfies Prisma.Reservation$reallocationsArgs;
 
 @Injectable()
 export class ReservationsService {
@@ -187,7 +195,7 @@ export class ReservationsService {
       include: {
         ...RESERVATION_INCLUDE,
         approvals: APPROVALS_INCLUDE,
-        reallocations: { orderBy: { reallocationDate: 'desc' } },
+        reallocations: REALLOCATIONS_INCLUDE,
       },
     });
     if (!reservation) {
@@ -241,7 +249,11 @@ export class ReservationsService {
     const [items, total] = await Promise.all([
       this.prisma.reservation.findMany({
         where,
-        include: { ...RESERVATION_INCLUDE, approvals: APPROVALS_INCLUDE },
+        include: {
+          ...RESERVATION_INCLUDE,
+          approvals: APPROVALS_INCLUDE,
+          reallocations: REALLOCATIONS_INCLUDE,
+        },
         orderBy: { startDateTime: 'desc' },
         ...toSkipTake(query),
       }),
@@ -273,7 +285,16 @@ export class ReservationsService {
       });
     }
     const rules = this.reservationRules.current();
-    if (!canCancel(reservation.startDateTime, new Date(), rules.cancelMinHours)) {
+    const reallocated =
+      (await this.prisma.reallocation.count({ where: { reservationId: id } })) > 0;
+    if (
+      !canCancelReservation(
+        reservation.startDateTime,
+        new Date(),
+        rules.cancelMinHours,
+        reallocated,
+      )
+    ) {
       throw new UnprocessableEntityException({
         code: 'CANCEL_TOO_LATE',
         message: `Solo se puede cancelar con al menos ${rules.cancelMinHours} horas de anticipación`,

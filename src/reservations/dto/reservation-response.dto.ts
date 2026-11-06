@@ -118,6 +118,12 @@ export class ReservationReallocationDto {
 
   @ApiProperty({ format: 'date-time' })
   reallocationDate!: Date;
+
+  @ApiProperty({ type: ReservationResourceDto })
+  previousResource!: ReservationResourceDto;
+
+  @ApiProperty({ type: ReservationResourceDto })
+  newResource!: ReservationResourceDto;
 }
 
 export class ReservationSeriesRefDto {
@@ -189,6 +195,20 @@ export class ReservationWithApprovalsDto extends ReservationResponseDto {
 export class ReservationDetailResponseDto extends ReservationWithApprovalsDto {
   @ApiProperty({ type: [ReservationReallocationDto] })
   reallocations!: ReservationReallocationDto[];
+}
+
+export class MyReservationPageResponseDto {
+  @ApiProperty()
+  total!: number;
+
+  @ApiProperty()
+  page!: number;
+
+  @ApiProperty()
+  pageSize!: number;
+
+  @ApiProperty({ type: [ReservationDetailResponseDto] })
+  items!: ReservationDetailResponseDto[];
 }
 
 export class ReservationPageResponseDto {

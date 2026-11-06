@@ -69,6 +69,16 @@ export function canCancel(start: Date, now: Date, cancelMinHours: number): boole
   return start.getTime() - now.getTime() >= cancelMinHours * HOUR;
 }
 
+export function canCancelReservation(
+  start: Date,
+  now: Date,
+  cancelMinHours: number,
+  reallocated: boolean,
+): boolean {
+  if (reallocated) return start.getTime() > now.getTime();
+  return canCancel(start, now, cancelMinHours);
+}
+
 export function isWithinCheckInWindow(
   start: Date,
   now: Date,

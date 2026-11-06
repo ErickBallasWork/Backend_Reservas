@@ -10,8 +10,8 @@ import {
 } from './dto/reservation.dto';
 import { ReservationEditService } from './reservation-edit.service';
 import {
+  MyReservationPageResponseDto,
   ReservationDetailResponseDto,
-  ReservationPageResponseDto,
 } from './dto/reservation-response.dto';
 import { ReservationsService } from './reservations.service';
 
@@ -36,7 +36,7 @@ export class ReservationsController {
   }
 
   @Get('mine')
-  @ApiOkResponse({ type: ReservationPageResponseDto })
+  @ApiOkResponse({ type: MyReservationPageResponseDto })
   @ApiOperation({ summary: 'Mis reservas' })
   listMine(@CurrentUser() user: CurrentUserData, @Query() query: MyReservationsQueryDto) {
     return this.reservations.listMine(user.id, query);

@@ -1,6 +1,7 @@
 import {
   buildSlotStarts,
   canCancel,
+  canCancelReservation,
   chunk,
   isAlignedToSlot,
   isWithinCheckInWindow,
@@ -112,5 +113,21 @@ describe('Cancelación y check-in', () => {
     expect(isWithinCheckInWindow(start, new Date('2026-11-11T15:15:00Z'), 15, 15)).toBe(true);
     expect(isWithinCheckInWindow(start, new Date('2026-11-11T15:16:00Z'), 15, 15)).toBe(false);
     expect(isWithinCheckInWindow(start, new Date('2026-11-11T14:44:00Z'), 15, 15)).toBe(false);
+  });
+});
+
+describe('canCancelReservation', () => {
+  const soon = new Date('2026-11-10T20:00:00Z');
+
+  it('keeps the minimum notice for a reservation that was never moved', () => {
+    expect(canCancelReservation(soon, now, 24, false)).toBe(false);
+  });
+
+  it('waives the minimum notice after a reallocation', () => {
+    expect(canCancelReservation(soon, now, 24, true)).toBe(true);
+  });
+
+  it('does not allow cancelling a reallocated reservation that already started', () => {
+    expect(canCancelReservation(new Date('2026-11-10T14:00:00Z'), now, 24, true)).toBe(false);
   });
 });
