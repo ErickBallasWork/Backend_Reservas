@@ -1,9 +1,9 @@
 import {
-  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
+  BadRequestException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service';
@@ -11,15 +11,26 @@ import { CatalogLookupService } from '../catalog/catalog-lookup.service';
 import { Status, SUPERADMIN_ROLE } from '../common/constants';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { isUniqueViolation } from '../common/db.types';
-import { formatDate } from '../common/format';
 import { AppConfigService } from '../config/app-config.service';
 import { ReservationRulesService } from '../config/reservation-rules.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { toLocalSlots } from '../operating-hours/operating-calendar';
+import { OperatingHoursService } from '../operating-hours/operating-hours.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { LeaderNotifier } from '../reservations/leader-notifier';
 import { ReservationsService } from '../reservations/reservations.service';
 import { insertSlots } from '../reservations/slots';
-import { buildSlotStarts, validateReservationTimes } from '../reservations/time-rules';
+import { buildSlotStarts } from '../reservations/time-rules';
 import { ReallocateReservationDto } from './dto/reallocation.dto';
+import { buildReallocationNotice } from './reallocation-notice';
+import {
+  assertFitsCapacity,
+  assertReallocationTimes,
+  planReallocation,
+} from './reallocation-rules';
+
+const roomLabel = (room: { name: string; building: { name: string } }) =>
+  `${room.name} (${room.building.name})`;
 
 @Injectable()
 export class ReallocationsService {
@@ -31,12 +42,17 @@ export class ReallocationsService {
     private readonly audit: AuditService,
     private readonly reservationRules: ReservationRulesService,
     private readonly appConfig: AppConfigService,
+    private readonly operatingHours: OperatingHoursService,
+    private readonly leaderNotifier: LeaderNotifier,
   ) {}
 
   async reallocate(spoc: CurrentUserData, reservationId: string, dto: ReallocateReservationDto) {
     const reservation = await this.prisma.reservation.findUnique({
       where: { id: reservationId },
-      include: { resource: true },
+      include: {
+        resource: { include: { building: true } },
+        user: { select: { fullName: true } },
+      },
     });
     if (!reservation) {
       throw new NotFoundException({
@@ -56,12 +72,6 @@ export class ReallocationsService {
         message: `No se puede reasignar una reserva en estado ${reservation.status}`,
       });
     }
-    if (!dto.newResourceId && !dto.newStartDateTime && !dto.newEndDateTime) {
-      throw new BadRequestException({
-        code: 'NOTHING_TO_CHANGE',
-        message: 'Indica una nueva sala, un nuevo horario o ambos',
-      });
-    }
 
     const room = await this.lookup.getActiveResource(dto.newResourceId ?? reservation.resourceId, [
       'MEETING_ROOM',
@@ -78,32 +88,52 @@ export class ReallocationsService {
       }
     }
 
-    const start = dto.newStartDateTime ? new Date(dto.newStartDateTime) : reservation.startDateTime;
-    const end = dto.newEndDateTime ? new Date(dto.newEndDateTime) : reservation.endDateTime;
+    const plan = planReallocation(reservation, {
+      resourceId: dto.newResourceId,
+      startDateTime: dto.newStartDateTime ? new Date(dto.newStartDateTime) : undefined,
+      endDateTime: dto.newEndDateTime ? new Date(dto.newEndDateTime) : undefined,
+    });
+    if (!plan.changed) {
+      throw new BadRequestException({
+        code: 'NOTHING_TO_CHANGE',
+        message: 'Indica una nueva sala, un nuevo horario o ambos',
+      });
+    }
+
     const rules = this.reservationRules.current();
+    const { startDateTime: start, endDateTime: end } = plan.next;
+    const slotStarts = buildSlotStarts(start, end, rules.slotMinutes);
+    const { timeZone } = this.appConfig.server;
     try {
-      validateReservationTimes(start, end, new Date(), { ...rules, minAdvanceHours: 0 });
+      assertReallocationTimes(reservation, plan.next, new Date(), rules);
+      assertFitsCapacity(reservation.attendees, room.capacity);
+      await this.operatingHours.assertOpen(room, toLocalSlots(slotStarts, timeZone));
     } catch (error) {
       ReservationsService.toHttpError(error);
     }
 
     const justification = dto.justification.trim();
-    const { timeZone } = this.appConfig.server;
     try {
       await this.prisma.$transaction(
         async (tx) => {
-          await tx.reservationSlot.deleteMany({ where: { reservationId } });
-          await tx.reservation.update({
-            where: { id: reservationId },
+          const moved = await tx.reservation.updateMany({
+            where: {
+              id: reservationId,
+              status: reservation.status,
+              resourceId: reservation.resourceId,
+              startDateTime: reservation.startDateTime,
+              endDateTime: reservation.endDateTime,
+            },
             data: { resourceId: room.id, startDateTime: start, endDateTime: end },
           });
-          await insertSlots(
-            tx,
-            reservationId,
-            [room.id],
-            buildSlotStarts(start, end, rules.slotMinutes),
-            rules.slotMinutes,
-          );
+          if (moved.count === 0) {
+            throw new ConflictException({
+              code: 'CONCURRENT_CONFLICT',
+              message: 'La reserva cambió mientras la reasignabas. Revísala e intenta de nuevo.',
+            });
+          }
+          await tx.reservationSlot.deleteMany({ where: { reservationId } });
+          await insertSlots(tx, reservationId, [room.id], slotStarts, rules.slotMinutes);
           await tx.reallocation.create({
             data: {
               reservationId,
@@ -122,10 +152,27 @@ export class ReallocationsService {
               userId: reservation.userId,
               type: 'RESERVATION_REALLOCATED',
               title: 'Tu reserva fue reasignada',
-              message: `Tu reserva de ${reservation.resource.name} se movió a ${room.name} (del ${formatDate(start, timeZone)} al ${formatDate(end, timeZone)}). Motivo: ${justification}`,
+              message: buildReallocationNotice({
+                previous: {
+                  roomLabel: roomLabel(reservation.resource),
+                  startDateTime: reservation.startDateTime,
+                  endDateTime: reservation.endDateTime,
+                },
+                next: { roomLabel: roomLabel(room), startDateTime: start, endDateTime: end },
+                justification,
+                inSeries: reservation.seriesId !== null,
+                timeZone,
+              }),
             },
             tx,
           );
+          if (reservation.status === Status.PENDING_APPROVAL) {
+            await this.leaderNotifier.reallocated(tx, {
+              requesterId: reservation.userId,
+              requesterName: reservation.user.fullName,
+              label: roomLabel(room),
+            });
+          }
           await this.audit.log(
             {
               userId: spoc.id,
@@ -133,12 +180,21 @@ export class ReallocationsService {
               entity: 'Reservation',
               entityId: reservationId,
               details: {
+                ownerId: reservation.userId,
+                seriesId: reservation.seriesId,
+                status: reservation.status,
                 from: {
                   resourceId: reservation.resourceId,
+                  buildingId: reservation.resource.buildingId,
                   startDateTime: reservation.startDateTime,
                   endDateTime: reservation.endDateTime,
                 },
-                to: { resourceId: room.id, startDateTime: start, endDateTime: end },
+                to: {
+                  resourceId: room.id,
+                  buildingId: room.buildingId,
+                  startDateTime: start,
+                  endDateTime: end,
+                },
                 justification,
               },
             },

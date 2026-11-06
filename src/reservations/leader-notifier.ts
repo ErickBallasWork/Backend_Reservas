@@ -31,4 +31,15 @@ export class LeaderNotifier {
       );
     }
   }
+
+  async reallocated(tx: Prisma.TransactionClient, request: ApprovalRequest) {
+    const message = `Un evento con cliente movió el entrenamiento de ${request.requesterName} a ${request.label}. Revisa la solicitud en tu bandeja.`;
+    const recipients = await this.routing.recipientIds(request.requesterId, tx);
+    for (const userId of recipients) {
+      await this.notifications.notify(
+        { userId, type: 'APPROVAL_REALLOCATED', title: 'Entrenamiento reasignado', message },
+        tx,
+      );
+    }
+  }
 }

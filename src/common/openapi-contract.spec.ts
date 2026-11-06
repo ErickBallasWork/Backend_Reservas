@@ -20,6 +20,9 @@ import { CatalogTreeService } from '../catalog/catalog-tree.service';
 import { ResourcesController } from '../catalog/resources.controller';
 import { ResourcesService } from '../catalog/resources.service';
 import { AppConfigService } from '../config/app-config.service';
+import { ReallocationsController } from '../reallocations/reallocations.controller';
+import { ReallocationsService } from '../reallocations/reallocations.service';
+import { SpocAgendaService } from '../reallocations/spoc-agenda.service';
 import { ReservationEditService } from '../reservations/reservation-edit.service';
 import { ReservationSeriesController } from '../reservations/series/reservation-series.controller';
 import { ReservationSeriesService } from '../reservations/series/reservation-series.service';
@@ -83,6 +86,8 @@ const DOCUMENTED_OPERATIONS: [string, string][] = [
   ['get', '/approvals/pending'],
   ['post', '/approvals/{reservationId}'],
   ['post', '/approvals/series/{seriesId}'],
+  ['get', '/spoc/agenda'],
+  ['post', '/reservations/{id}/reallocate'],
 ];
 
 function sourceFiles(dir: string): string[] {
@@ -113,6 +118,7 @@ describe('OpenAPI contract', () => {
         OperatingHoursController,
         ReservationSeriesController,
         ApprovalsController,
+        ReallocationsController,
       ],
       providers: [
         { provide: AuthService, useValue: {} },
@@ -130,6 +136,8 @@ describe('OpenAPI contract', () => {
         { provide: ReservationSeriesService, useValue: {} },
         { provide: OperatingHoursService, useValue: {} },
         { provide: ApprovalsService, useValue: {} },
+        { provide: ReallocationsService, useValue: {} },
+        { provide: SpocAgendaService, useValue: {} },
         { provide: PrismaService, useValue: {} },
       ],
     }).compile();

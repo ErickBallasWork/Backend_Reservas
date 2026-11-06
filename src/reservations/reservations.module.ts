@@ -20,6 +20,6 @@ import { ReservationsService } from './reservations.service';
     LeaderNotifier,
     ApprovalRoutingService,
   ],
-  exports: [ReservationsService, ApprovalRoutingService],
+  exports: [ReservationsService, ApprovalRoutingService, LeaderNotifier],
 })
 export class ReservationsModule {}
