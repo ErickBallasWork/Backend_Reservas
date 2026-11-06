@@ -118,6 +118,12 @@ async function main() {
       roles: ['ASOCIADO', 'SPOC_EDIFICIO'],
     },
     { email: 'admin@demo.com', fullName: 'Administrador Demo', department: 'TI', roles: ['ADMIN'] },
+    {
+      email: 'superadmin@demo.com',
+      fullName: 'Superadministrador Demo',
+      department: 'TI',
+      roles: ['SUPERADMIN'],
+    },
   ];
 
   for (const u of users) {
@@ -137,7 +143,7 @@ async function main() {
   }
 
   console.log(
-    'Demo data ready: 5 roles, 2 buildings, 4 rooms, 1 lab with 5 laptops and 5 demo users.',
+    'Demo data ready: 6 roles, 2 buildings, 4 rooms, 1 lab with 5 laptops and 6 demo users.',
   );
 }
 

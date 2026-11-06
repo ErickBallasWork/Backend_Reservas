@@ -1,5 +1,15 @@
-export const ROLES = ['ASOCIADO', 'ADMIN', 'SPOC_ADMIN', 'LIDER', 'SPOC_EDIFICIO'] as const;
+export const ROLES = [
+  'ASOCIADO',
+  'ADMIN',
+  'SPOC_ADMIN',
+  'LIDER',
+  'SPOC_EDIFICIO',
+  'SUPERADMIN',
+] as const;
 export type Role = (typeof ROLES)[number];
+
+export const SUPERADMIN_ROLE: Role = 'SUPERADMIN';
+export const PRIVILEGED_ROLES: readonly string[] = ['ADMIN', SUPERADMIN_ROLE];
 
 export const RESOURCE_TYPES = ['MEETING_ROOM', 'AI_LAB', 'LAPTOP'] as const;
 export type ResourceType = (typeof RESOURCE_TYPES)[number];

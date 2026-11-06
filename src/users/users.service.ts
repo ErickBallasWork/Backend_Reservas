@@ -1,10 +1,16 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { USER_WITH_ROLES } from '../auth/current-user.mapper';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto, RoleAssignmentDto, UpdateUserDto } from './dto/user.dto';
+import { assertCanManageRoles, removesSuperadminAccess } from './role-assignment.policy';
 
 @Injectable()
 export class UsersService {
@@ -81,6 +87,11 @@ export class UsersService {
 
   async create(admin: CurrentUserData, dto: CreateUserDto) {
     const roles: RoleAssignmentDto[] = dto.roles ?? [{ role: 'ASOCIADO' }];
+    assertCanManageRoles(
+      admin.roles,
+      [],
+      roles.map((r) => r.role),
+    );
     const rows = await this.toRoleRows(roles);
     const user = await this.prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
@@ -108,6 +119,17 @@ export class UsersService {
 
   async update(admin: CurrentUserData, id: string, dto: UpdateUserDto) {
     const before = await this.get(id);
+    const beforeRoles = before.roles.map((r) => r.role.name);
+    const requestedRoles = dto.roles?.map((r) => r.role);
+    assertCanManageRoles(admin.roles, beforeRoles, requestedRoles);
+    await this.assertKeepsASuperadmin(
+      id,
+      { isActive: before.isActive, roles: beforeRoles },
+      {
+        isActive: dto.isActive,
+        roles: requestedRoles,
+      },
+    );
     const rows = dto.roles ? await this.toRoleRows(dto.roles) : null;
 
     await this.prisma.$transaction(async (tx) => {
@@ -134,6 +156,23 @@ export class UsersService {
       );
     });
     return this.get(id);
+  }
+
+  private async assertKeepsASuperadmin(
+    id: string,
+    before: { isActive: boolean; roles: string[] },
+    change: { isActive?: boolean; roles?: string[] },
+  ) {
+    if (!removesSuperadminAccess(before, change)) return;
+    const others = await this.prisma.user.count({
+      where: { id: { not: id }, isActive: true, roles: { some: { role: { name: 'SUPERADMIN' } } } },
+    });
+    if (others === 0) {
+      throw new ConflictException({
+        code: 'LAST_SUPERADMIN',
+        message: 'Debe quedar al menos un SUPERADMIN activo',
+      });
+    }
   }
 
   private async get(id: string) {

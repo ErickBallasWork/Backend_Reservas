@@ -8,6 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
+import { SUPERADMIN_ROLE } from '../common/constants';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { IS_PUBLIC_KEY } from '../common/current-user/public.decorator';
 import { PrismaService } from '../prisma/prisma.service';
@@ -33,7 +34,7 @@ export class AuthGuard implements CanActivate {
     const required = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, targets);
     if (required && required.length > 0) {
       const roles = request.user.roles;
-      if (!roles.includes('ADMIN') && !required.some((r) => roles.includes(r))) {
+      if (!roles.includes(SUPERADMIN_ROLE) && !required.some((r) => roles.includes(r))) {
         throw new ForbiddenException({
           code: 'FORBIDDEN_ROLE',
           message: `Necesitas uno de estos roles: ${required.join(', ')}`,

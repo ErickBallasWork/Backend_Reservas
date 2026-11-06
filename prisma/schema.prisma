@@ -95,7 +95,7 @@ model User {
   @@map("USERS")
 }
 
-// ASOCIADO | ADMIN | SPOC_ADMIN | LIDER | SPOC_EDIFICIO (se cargan con el seed)
+// ASOCIADO | ADMIN | SPOC_ADMIN | LIDER | SPOC_EDIFICIO | SUPERADMIN (se cargan con el seed)
 model Role {
   id    Int        @id @default(autoincrement()) @map("Id")
   name  String     @unique @map("Name") @db.NVarChar(30)

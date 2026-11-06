@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service';
 import { CatalogLookupService } from '../catalog/catalog-lookup.service';
-import { Status } from '../common/constants';
+import { Status, SUPERADMIN_ROLE } from '../common/constants';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { isUniqueViolation } from '../common/db.types';
 import { formatDate } from '../common/format';
@@ -67,7 +67,7 @@ export class ReallocationsService {
       'MEETING_ROOM',
     ]);
 
-    if (!spoc.roles.includes('ADMIN')) {
+    if (!spoc.roles.includes(SUPERADMIN_ROLE)) {
       const ownsOrigin = spoc.spocBuildingIds.includes(reservation.resource.buildingId);
       const ownsTarget = spoc.spocBuildingIds.includes(room.buildingId);
       if (!ownsOrigin || !ownsTarget) {

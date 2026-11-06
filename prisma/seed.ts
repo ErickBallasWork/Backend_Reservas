@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { ROLES } from '../src/common/constants';
 import { readSeedEnvironment } from './seed-environment';
 
-const { initialAdmin } = readSeedEnvironment();
+const { initialSuperadmin } = readSeedEnvironment();
 const prisma = new PrismaClient();
 
 async function main() {
@@ -10,25 +10,25 @@ async function main() {
     await prisma.role.upsert({ where: { name }, update: {}, create: { name } });
   }
 
-  if (!initialAdmin) {
-    console.warn('Roles ready. INITIAL_ADMIN_EMAIL is not set, so no administrator was created.');
+  if (!initialSuperadmin) {
+    console.warn('Roles ready. INITIAL_SUPERADMIN_EMAIL is not set, so no SUPERADMIN was created.');
     return;
   }
-  const { email, fullName } = initialAdmin;
+  const { email, fullName } = initialSuperadmin;
 
-  const admin = await prisma.user.upsert({
+  const superadmin = await prisma.user.upsert({
     where: { email },
     update: {},
     create: { email, fullName },
   });
-  const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'ADMIN' } });
-  const isAlreadyAdmin = await prisma.userRole.findFirst({
-    where: { userId: admin.id, roleId: adminRole.id },
+  const superadminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'SUPERADMIN' } });
+  const isAlreadySuperadmin = await prisma.userRole.findFirst({
+    where: { userId: superadmin.id, roleId: superadminRole.id },
   });
-  if (!isAlreadyAdmin) {
-    await prisma.userRole.create({ data: { userId: admin.id, roleId: adminRole.id } });
+  if (!isAlreadySuperadmin) {
+    await prisma.userRole.create({ data: { userId: superadmin.id, roleId: superadminRole.id } });
   }
-  console.log(`Roles ready. Initial administrator: ${email}`);
+  console.log(`Roles ready. Initial SUPERADMIN: ${email}`);
 }
 
 main()

@@ -1,13 +1,17 @@
 import { type ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { type JwtService } from '@nestjs/jwt';
+import { type Role } from '../common/constants';
 import { type PrismaService } from '../prisma/prisma.service';
 import { AuthGuard } from './auth.guard';
+import { Roles } from './roles.decorator';
 
-function contextWith(headers: Record<string, string>): ExecutionContext {
+function contextWith(headers: Record<string, string>, requiredRoles?: Role[]): ExecutionContext {
   const request = { headers };
+  const handler = () => undefined;
+  if (requiredRoles) Roles(...requiredRoles)(handler);
   return {
-    getHandler: () => contextWith,
+    getHandler: () => handler,
     getClass: () => AuthGuard,
     switchToHttp: () => ({ getRequest: () => request }),
   } as unknown as ExecutionContext;
@@ -60,5 +64,34 @@ describe('AuthGuard', () => {
     await expect(
       guard.canActivate(contextWith({ authorization: 'Bearer ok' })),
     ).rejects.toMatchObject({ response: { code: 'USER_INACTIVE' } });
+  });
+
+  describe('role checks', () => {
+    async function canActivateAs(userRoles: string[], required: Role[]) {
+      const { guard, jwt, findUnique } = buildGuard();
+      jwt.verifyAsync.mockResolvedValue({ sub: 'user-id', email: 'a@tcs.com' });
+      findUnique.mockResolvedValue({
+        id: 'user-id',
+        email: 'a@tcs.com',
+        fullName: 'A',
+        isActive: true,
+        roles: userRoles.map((name) => ({ buildingId: null, role: { name } })),
+      });
+      return guard.canActivate(contextWith({ authorization: 'Bearer ok' }, required));
+    }
+
+    it('lets a SUPERADMIN through any role requirement', async () => {
+      await expect(canActivateAs(['SUPERADMIN'], ['LIDER'])).resolves.toBe(true);
+    });
+
+    it('does not let an ADMIN through a requirement for another role', async () => {
+      await expect(canActivateAs(['ADMIN'], ['LIDER'])).rejects.toMatchObject({
+        response: { code: 'FORBIDDEN_ROLE' },
+      });
+    });
+
+    it('lets a user through when they hold a required role', async () => {
+      await expect(canActivateAs(['ASOCIADO', 'LIDER'], ['LIDER'])).resolves.toBe(true);
+    });
   });
 });

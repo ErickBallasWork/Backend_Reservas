@@ -21,7 +21,7 @@ no trae compose.
 npm ci                    # dependencias, cliente de Prisma y hooks de git
 cp .env.example .env      # completa JWT_SECRET (ver tabla de variables)
 npm run db:deploy         # aplica las migraciones
-npm run db:seed           # roles + administrador inicial (INITIAL_ADMIN_EMAIL)
+npm run db:seed           # roles + SUPERADMIN inicial (INITIAL_SUPERADMIN_EMAIL)
 npm run db:seed:demo      # datos demo: edificios, salas, laboratorio, laptops y usuarios
 npm run start:dev         # API en http://localhost:3001/api/v1
 ```
@@ -35,22 +35,22 @@ npm run start:dev         # API en http://localhost:3001/api/v1
 La API valida todas las variables al arrancar y se niega a iniciar si alguna falta o es inválida. El
 mensaje lista cada problema.
 
-| Variable                | Obligatoria | Por defecto          | Secreta | Descripción                                                                                      |
-| ----------------------- | ----------- | -------------------- | ------- | ------------------------------------------------------------------------------------------------ |
-| `NODE_ENV`              | no          | `development`        | no      | `development`, `test` o `production`                                                             |
-| `PORT`                  | no          | `3001`               | no      | Puerto HTTP                                                                                      |
-| `CORS_ORIGINS`          | sí          | —                    | no      | Orígenes del frontend separados por coma, con protocolo                                          |
-| `SWAGGER_ENABLED`       | no          | `true` fuera de prod | no      | `true` o `false`. En producción está apagado salvo que se ponga `true`                           |
-| `APP_TIME_ZONE`         | no          | `America/Guayaquil`  | no      | Zona IANA para los textos de los avisos                                                          |
-| `DATABASE_URL`          | sí          | —                    | **sí**  | Cadena de conexión de Prisma a SQL Server                                                        |
-| `JWT_SECRET`            | sí          | —                    | **sí**  | Mínimo 32 caracteres. `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
-| `JWT_EXPIRES_HOURS`     | no          | `8`                  | no      | Duración de la sesión, de 1 a 24                                                                 |
-| `ALLOWED_EMAIL_DOMAINS` | sí          | —                    | no      | Dominios permitidos separados por coma, por ejemplo `tcs.com,pichincha.com`                      |
-| `DEMO_LOGIN_ENABLED`    | no          | `false`              | no      | `true` habilita `POST /auth/demo` (solo desarrollo). La API no arranca así en producción         |
-| `NOTIFY_CHANNELS`       | no          | vacío                | no      | Canales extra a la bandeja: `PUSH`, `EMAIL` o ambos                                              |
-| `JOB_KEY`               | no          | —                    | **sí**  | Si se define (mínimo 32), las tareas programadas exigen la cabecera `x-job-key`                  |
-| `INITIAL_ADMIN_EMAIL`   | solo seed   | —                    | no      | Administrador que crea `npm run db:seed`                                                         |
-| `INITIAL_ADMIN_NAME`    | solo seed   | el correo            | no      | Nombre del administrador inicial                                                                 |
+| Variable                   | Obligatoria | Por defecto          | Secreta | Descripción                                                                                      |
+| -------------------------- | ----------- | -------------------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `NODE_ENV`                 | no          | `development`        | no      | `development`, `test` o `production`                                                             |
+| `PORT`                     | no          | `3001`               | no      | Puerto HTTP                                                                                      |
+| `CORS_ORIGINS`             | sí          | —                    | no      | Orígenes del frontend separados por coma, con protocolo                                          |
+| `SWAGGER_ENABLED`          | no          | `true` fuera de prod | no      | `true` o `false`. En producción está apagado salvo que se ponga `true`                           |
+| `APP_TIME_ZONE`            | no          | `America/Guayaquil`  | no      | Zona IANA para los textos de los avisos                                                          |
+| `DATABASE_URL`             | sí          | —                    | **sí**  | Cadena de conexión de Prisma a SQL Server                                                        |
+| `JWT_SECRET`               | sí          | —                    | **sí**  | Mínimo 32 caracteres. `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
+| `JWT_EXPIRES_HOURS`        | no          | `8`                  | no      | Duración de la sesión, de 1 a 24                                                                 |
+| `ALLOWED_EMAIL_DOMAINS`    | sí          | —                    | no      | Dominios permitidos separados por coma, por ejemplo `tcs.com,pichincha.com`                      |
+| `DEMO_LOGIN_ENABLED`       | no          | `false`              | no      | `true` habilita `POST /auth/demo` (solo desarrollo). La API no arranca así en producción         |
+| `NOTIFY_CHANNELS`          | no          | vacío                | no      | Canales extra a la bandeja: `PUSH`, `EMAIL` o ambos                                              |
+| `JOB_KEY`                  | no          | —                    | **sí**  | Si se define (mínimo 32), las tareas programadas exigen la cabecera `x-job-key`                  |
+| `INITIAL_SUPERADMIN_EMAIL` | solo seed   | —                    | no      | SUPERADMIN que crea `npm run db:seed`                                                            |
+| `INITIAL_SUPERADMIN_NAME`  | solo seed   | el correo            | no      | Nombre del SUPERADMIN inicial                                                                    |
 
 Las reglas de reserva (franjas de 30 min, 24 h de anticipación, 48 h máximo, ventana de check-in) ya no
 van en el entorno: viven en `src/config/reservation-rules.service.ts` y más adelante se administrarán
@@ -100,6 +100,7 @@ nueva de `prisma/migrations`. Las migraciones ya aplicadas no se editan.
 | sofia.spocadmin@demo.com | ASOCIADO, SPOC_ADMIN                           |
 | carlos.spoc@demo.com     | ASOCIADO, SPOC_EDIFICIO (Edificio Quito Norte) |
 | admin@demo.com           | ADMIN                                          |
+| superadmin@demo.com      | SUPERADMIN                                     |
 
 ## Inicio de sesión
 
