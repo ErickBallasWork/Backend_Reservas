@@ -63,6 +63,7 @@ export const ACCESS_REQUEST_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'] as co
 export type AccessRequestStatus = (typeof ACCESS_REQUEST_STATUSES)[number];
 
 export const ACCESS_REQUEST_COOLDOWN_DAYS = 7;
+export const BOOTSTRAP_AUTO_APPROVE_WINDOW_HOURS = 24;
 
 export const SANCTION_STATUSES = ['ACTIVE', 'RESOLVED'] as const;
 export type SanctionStatus = (typeof SANCTION_STATUSES)[number];

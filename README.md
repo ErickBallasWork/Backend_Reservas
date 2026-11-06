@@ -124,6 +124,8 @@ El seed crea al SUPERADMIN (`INITIAL_SUPERADMIN_EMAIL`), pero ningún navegador 
 2. Con acceso a la base, ejecuta `npm run access:approve -- <correo>`. Solo aprueba solicitudes pendientes de usuarios que ya son SUPERADMIN, y deja el registro en la auditoría.
 3. La pantalla `/login` de ese navegador entra sola.
 
+Alternativa sin consola: con `INITIAL_SUPERADMIN_AUTO_APPROVE=true`, el paso 2 es automático. La solicitud del correo `INITIAL_SUPERADMIN_EMAIL` nace aprobada solo si ese usuario es SUPERADMIN, se creó hace menos de 24 horas y nunca tuvo un dispositivo ni una solicitud aprobada. Queda en la auditoría con `source: bootstrap-auto-approve` y la API avisa en el log al arrancar. Apaga la variable después del primer ingreso.
+
 Los demás dispositivos y usuarios se aprueban desde la bandeja de solicitudes.
 
 ## Docker y despliegue

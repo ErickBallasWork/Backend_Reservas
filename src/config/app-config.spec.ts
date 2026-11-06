@@ -165,4 +165,23 @@ describe('loadAppConfig', () => {
   it('reports every invalid variable at once', () => {
     expect(() => loadAppConfig({})).toThrow(/DATABASE_URL[\s\S]*JWT_SECRET/);
   });
+
+  it('keeps auto-approval off by default and exposes the bootstrap SUPERADMIN', () => {
+    expect(loadAppConfig(baseEnv()).auth.bootstrapSuperadmin).toBeNull();
+
+    const config = loadAppConfig(
+      baseEnv({
+        INITIAL_SUPERADMIN_EMAIL: ' Admin@TCS.com ',
+        INITIAL_SUPERADMIN_AUTO_APPROVE: 'true',
+      }),
+    );
+
+    expect(config.auth.bootstrapSuperadmin).toEqual({ email: 'admin@tcs.com', autoApprove: true });
+  });
+
+  it('requires the initial SUPERADMIN email for auto-approval', () => {
+    expect(() => loadAppConfig(baseEnv({ INITIAL_SUPERADMIN_AUTO_APPROVE: 'true' }))).toThrow(
+      /INITIAL_SUPERADMIN_EMAIL/,
+    );
+  });
 });

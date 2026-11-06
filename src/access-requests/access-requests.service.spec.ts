@@ -17,7 +17,7 @@ const ACTOR: CurrentUserData = {
   spocBuildingIds: [],
 };
 
-function build() {
+function build(bootstrapSuperadmin: { email: string; autoApprove: boolean } | null = null) {
   const accessRequest = {
     create: jest.fn(),
     findFirst: jest.fn().mockResolvedValue(null),
@@ -32,8 +32,9 @@ function build() {
     findMany: jest.fn().mockResolvedValue([{ id: 'superadmin-id' }]),
     create: jest.fn().mockResolvedValue({ id: 'new-user-id' }),
   };
-  const userRole = { createMany: jest.fn() };
-  const tx = { accessRequest, user, userRole };
+  const userRole = { createMany: jest.fn(), count: jest.fn().mockResolvedValue(1) };
+  const device = { count: jest.fn().mockResolvedValue(0) };
+  const tx = { accessRequest, user, userRole, device };
   const prisma = {
     accessRequest,
     user,
@@ -50,12 +51,12 @@ function build() {
     audit as unknown as AuditService,
     notifications as unknown as NotificationsService,
     {
-      auth: { allowedEmailDomains: ['tcs.com', 'pichincha.com'] },
+      auth: { allowedEmailDomains: ['tcs.com', 'pichincha.com'], bootstrapSuperadmin },
       server: { timeZone: 'America/Guayaquil' },
     } as unknown as AppConfigService,
     roleRows as unknown as RoleRowsService,
   );
-  return { service, accessRequest, user, userRole, audit, notifications, roleRows };
+  return { service, accessRequest, user, userRole, device, audit, notifications, roleRows };
 }
 
 const createDto = {
@@ -287,5 +288,90 @@ describe('AccessRequestsService.reject', () => {
       expect.objectContaining({ action: 'ACCESS_REQUEST_REJECTED' }),
       expect.anything(),
     );
+  });
+});
+
+describe('AccessRequestsService.create bootstrap auto-approval', () => {
+  const ADMIN_EMAIL = 'admin@tcs.com';
+  const dto = { ...createDto, email: ADMIN_EMAIL };
+
+  function buildAdmin(autoApprove = true, createdAgoHours = 1) {
+    const ctx = build({ email: ADMIN_EMAIL, autoApprove });
+    ctx.user.findUnique.mockResolvedValue({
+      id: 'admin-id',
+      email: ADMIN_EMAIL,
+      fullName: 'Admin',
+      department: null,
+      isActive: true,
+      createdAt: new Date(Date.now() - createdAgoHours * 60 * 60 * 1000),
+    });
+    ctx.accessRequest.create.mockResolvedValue({ id: 'req-id', fullName: 'Admin' });
+    ctx.accessRequest.count = jest.fn().mockResolvedValue(0);
+    return ctx;
+  }
+
+  function createdStatus(accessRequest: { create: jest.Mock }): unknown {
+    const [[args]] = accessRequest.create.mock.calls as [[{ data: { status?: string } }]];
+    return args.data.status;
+  }
+
+  it('approves the first device of the initial SUPERADMIN inside the window', async () => {
+    const { service, accessRequest, audit, notifications } = buildAdmin();
+
+    await service.create(dto);
+
+    expect(createdStatus(accessRequest)).toBe('APPROVED');
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'ACCESS_REQUEST_APPROVED',
+        details: expect.objectContaining({ source: 'bootstrap-auto-approve' }) as unknown,
+      }),
+      expect.anything(),
+    );
+    expect(notifications.notify).not.toHaveBeenCalled();
+  });
+
+  it('leaves the request pending when the flag is off', async () => {
+    const { service, accessRequest } = buildAdmin(false);
+
+    await service.create(dto);
+
+    expect(createdStatus(accessRequest)).toBeUndefined();
+  });
+
+  it('leaves the request pending after the 24 h window', async () => {
+    const { service, accessRequest } = buildAdmin(true, 25);
+
+    await service.create(dto);
+
+    expect(createdStatus(accessRequest)).toBeUndefined();
+  });
+
+  it('leaves the request pending when the user already had a device', async () => {
+    const { service, accessRequest, device } = buildAdmin();
+    device.count.mockResolvedValue(1);
+
+    await service.create(dto);
+
+    expect(createdStatus(accessRequest)).toBeUndefined();
+  });
+
+  it('leaves the request pending when the user is not a SUPERADMIN', async () => {
+    const { service, accessRequest, userRole } = buildAdmin();
+    userRole.count.mockResolvedValue(0);
+
+    await service.create(dto);
+
+    expect(createdStatus(accessRequest)).toBeUndefined();
+  });
+
+  it('never auto-approves another email', async () => {
+    const ctx = build({ email: ADMIN_EMAIL, autoApprove: true });
+    ctx.user.findUnique.mockResolvedValue({ id: 'u', fullName: 'Ana', department: null });
+    ctx.accessRequest.create.mockResolvedValue({ id: 'req-id', fullName: 'Ana' });
+
+    await ctx.service.create(createDto);
+
+    expect(createdStatus(ctx.accessRequest)).toBeUndefined();
   });
 });

@@ -16,6 +16,12 @@ export interface AuthConfig {
   deviceIdleDays: number;
   allowedEmailDomains: string[];
   demoLoginEnabled: boolean;
+  bootstrapSuperadmin: BootstrapSuperadminConfig | null;
+}
+
+export interface BootstrapSuperadminConfig {
+  email: string;
+  autoApprove: boolean;
 }
 
 export interface JobsConfig {
@@ -57,6 +63,9 @@ export function toAppConfig(env: EnvironmentVariables): AppConfig {
       deviceIdleDays: env.DEVICE_IDLE_DAYS,
       allowedEmailDomains: env.ALLOWED_EMAIL_DOMAINS,
       demoLoginEnabled: env.DEMO_LOGIN_ENABLED,
+      bootstrapSuperadmin: env.INITIAL_SUPERADMIN_EMAIL
+        ? { email: env.INITIAL_SUPERADMIN_EMAIL, autoApprove: env.INITIAL_SUPERADMIN_AUTO_APPROVE }
+        : null,
     },
     push:
       env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY && env.VAPID_SUBJECT

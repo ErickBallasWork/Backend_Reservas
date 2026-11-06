@@ -3,6 +3,7 @@ import { plainToInstance, Transform, type TransformFnParams, Type } from 'class-
 import {
   ArrayNotEmpty,
   IsBoolean,
+  IsEmail,
   IsFQDN,
   IsIn,
   IsInt,
@@ -100,6 +101,17 @@ export class EnvironmentVariables {
   DEMO_LOGIN_ENABLED = false;
 
   @IsOptional()
+  @Transform(({ value }: TransformFnParams): unknown =>
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  )
+  @IsEmail()
+  INITIAL_SUPERADMIN_EMAIL?: string;
+
+  @Transform(toBoolean)
+  @IsBoolean()
+  INITIAL_SUPERADMIN_AUTO_APPROVE = false;
+
+  @IsOptional()
   @IsString()
   @MinLength(MIN_SECRET_LENGTH)
   JOB_KEY?: string;
@@ -144,6 +156,9 @@ function crossFieldErrors(env: EnvironmentVariables): string[] {
   }
   if (env.NODE_ENV === 'production' && !env.JOB_KEY) {
     errors.push('JOB_KEY: is required in production');
+  }
+  if (env.INITIAL_SUPERADMIN_AUTO_APPROVE && !env.INITIAL_SUPERADMIN_EMAIL) {
+    errors.push('INITIAL_SUPERADMIN_EMAIL: is required when INITIAL_SUPERADMIN_AUTO_APPROVE=true');
   }
   const vapid = [env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY, env.VAPID_SUBJECT];
   if (vapid.some(Boolean) && !vapid.every(Boolean)) {
