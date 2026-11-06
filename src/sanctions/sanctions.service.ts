@@ -9,7 +9,7 @@ import { AuditService } from '../audit/audit.service';
 import { Status } from '../common/constants';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { toSkipTake } from '../common/pagination.dto';
-import { reservationRules } from '../config/reservation-rules';
+import { ReservationRulesService } from '../config/reservation-rules.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListSanctionsQueryDto, ResolveSanctionDto } from './dto/sanction.dto';
@@ -20,6 +20,7 @@ export class SanctionsService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly audit: AuditService,
+    private readonly reservationRules: ReservationRulesService,
   ) {}
 
   /** RF-12: un asociado con sanción activa no puede reservar. */
@@ -41,7 +42,7 @@ export class SanctionsService {
    */
   async processNoShows(filter: { userId?: string } = {}) {
     const now = new Date();
-    const rules = reservationRules();
+    const rules = this.reservationRules.current();
     const deadline = new Date(now.getTime() - rules.checkinAfterMin * 60_000);
     const byUser: Prisma.ReservationWhereInput = filter.userId ? { userId: filter.userId } : {};
 

@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { reservationRules } from '../config/reservation-rules';
+import { ReservationRulesService } from '../config/reservation-rules.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { chunk } from '../reservations/time-rules';
 import { DateRangeQueryDto, OccupancyQueryDto } from './dto/report.dto';
@@ -47,7 +47,10 @@ function rate(reserved: number, available: number): number {
  */
 @Injectable()
 export class ReportsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly reservationRules: ReservationRulesService,
+  ) {}
 
   private parseRange(query: DateRangeQueryDto) {
     const from = new Date(query.from);
@@ -70,7 +73,7 @@ export class ReportsService {
   async occupancy(query: OccupancyQueryDto): Promise<OccupancyRow[]> {
     const { from, to } = this.parseRange(query);
     const groupBy = query.groupBy ?? 'resource';
-    const slotHours = reservationRules().slotMinutes / 60;
+    const slotHours = this.reservationRules.current().slotMinutes / 60;
     const availableHours = (to.getTime() - from.getTime()) / HOUR;
 
     // Franjas reservadas por recurso. Solo cuentan reservas vivas (las canceladas y

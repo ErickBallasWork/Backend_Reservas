@@ -12,7 +12,7 @@ import { RESERVATION_TYPE_BY_RESOURCE, ResourceType, Status } from '../common/co
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { isUniqueViolation } from '../common/db.types';
 import { toSkipTake } from '../common/pagination.dto';
-import { reservationRules } from '../config/reservation-rules';
+import { ReservationRulesService } from '../config/reservation-rules.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SanctionsService } from '../sanctions/sanctions.service';
@@ -49,6 +49,7 @@ export class ReservationsService {
     private readonly sanctions: SanctionsService,
     private readonly notifications: NotificationsService,
     private readonly audit: AuditService,
+    private readonly reservationRules: ReservationRulesService,
   ) {}
 
   /** Convierte una regla incumplida en un error 422 con su código. */
@@ -61,7 +62,7 @@ export class ReservationsService {
 
   /** RF-03 a RF-08: reservar una sala, un laboratorio completo o una laptop. */
   async create(user: CurrentUserData, dto: CreateReservationDto) {
-    const rules = reservationRules();
+    const rules = this.reservationRules.current();
 
     // 1) Sanciones. Antes se calculan los No-Show pendientes de este usuario (respaldo de la tarea).
     await this.sanctions.processNoShows({ userId: user.id });
@@ -247,7 +248,7 @@ export class ReservationsService {
         message: `No se puede cancelar una reserva en estado ${reservation.status}`,
       });
     }
-    const rules = reservationRules();
+    const rules = this.reservationRules.current();
     if (!canCancel(reservation.startDateTime, new Date(), rules.cancelMinHours)) {
       throw new UnprocessableEntityException({
         code: 'CANCEL_TOO_LATE',
@@ -274,7 +275,7 @@ export class ReservationsService {
         message: `No se puede registrar el uso de una reserva en estado ${reservation.status}`,
       });
     }
-    const rules = reservationRules();
+    const rules = this.reservationRules.current();
     if (
       !isWithinCheckInWindow(
         reservation.startDateTime,

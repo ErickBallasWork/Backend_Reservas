@@ -13,7 +13,7 @@ import { CurrentUserData } from '../common/current-user/current-user.types';
 import { isUniqueViolation } from '../common/db.types';
 import { formatDate } from '../common/format';
 import { AppConfigService } from '../config/app-config.service';
-import { reservationRules } from '../config/reservation-rules';
+import { ReservationRulesService } from '../config/reservation-rules.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReservationsService } from '../reservations/reservations.service';
@@ -29,6 +29,7 @@ export class ReallocationsService {
     private readonly reservations: ReservationsService,
     private readonly notifications: NotificationsService,
     private readonly audit: AuditService,
+    private readonly reservationRules: ReservationRulesService,
     private readonly appConfig: AppConfigService,
   ) {}
 
@@ -85,7 +86,7 @@ export class ReallocationsService {
 
     const start = dto.newStartDateTime ? new Date(dto.newStartDateTime) : reservation.startDateTime;
     const end = dto.newEndDateTime ? new Date(dto.newEndDateTime) : reservation.endDateTime;
-    const rules = reservationRules();
+    const rules = this.reservationRules.current();
     try {
       // El SPOC no está sujeto a la anticipación mínima, pero sí a franjas, futuro y duración máxima.
       validateReservationTimes(start, end, new Date(), { ...rules, minAdvanceHours: 0 });

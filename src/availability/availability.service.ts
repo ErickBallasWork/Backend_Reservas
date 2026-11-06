@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { reservationRules } from '../config/reservation-rules';
+import { ReservationRulesService } from '../config/reservation-rules.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { chunk } from '../reservations/time-rules';
 import { RangeQueryDto, SearchAvailabilityQueryDto } from './dto/availability.dto';
@@ -9,7 +9,10 @@ const MAX_RANGE_DAYS = 14;
 
 @Injectable()
 export class AvailabilityService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly reservationRules: ReservationRulesService,
+  ) {}
 
   private parseRange(query: RangeQueryDto) {
     const from = new Date(query.from);
@@ -71,7 +74,7 @@ export class AvailabilityService {
       resourceId: resource.id,
       name: resource.name,
       type: resource.type,
-      slotMinutes: reservationRules().slotMinutes,
+      slotMinutes: this.reservationRules.current().slotMinutes,
       from: from.toISOString(),
       to: to.toISOString(),
       busySlots: busy.get(resource.id) ?? [],
