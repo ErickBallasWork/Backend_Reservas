@@ -36,6 +36,11 @@ export class ApprovalRoutingService {
     return fallback.map((user) => user.id);
   }
 
+  managedOwnersFilter(viewer: CurrentUserData): Prisma.ReservationWhereInput {
+    if (viewer.roles.some((role) => PRIVILEGED_ROLES.includes(role))) return {};
+    return { user: { managers: { some: { managerId: viewer.id } } } };
+  }
+
   pendingOwnersFilter(approver: CurrentUserData): Prisma.ReservationWhereInput {
     const routes: Prisma.ReservationWhereInput[] = [];
     if (approver.roles.includes('LIDER')) {
