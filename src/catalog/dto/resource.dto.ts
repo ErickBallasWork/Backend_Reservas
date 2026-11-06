@@ -11,12 +11,12 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { RESOURCE_TYPES } from '../../common/constants';
+import { RESOURCE_TYPES, type ResourceType } from '../../common/constants';
 
 export class CreateResourceDto {
-  @ApiProperty({ enum: [...RESOURCE_TYPES] })
+  @ApiProperty({ enum: RESOURCE_TYPES, enumName: 'ResourceType' })
   @IsIn([...RESOURCE_TYPES])
-  type!: string;
+  type!: ResourceType;
 
   @ApiPropertyOptional({
     description: 'Required for rooms and labs. A laptop takes the building of its lab',
@@ -102,10 +102,10 @@ export class ListResourcesQueryDto {
   @IsUUID()
   buildingId?: string;
 
-  @ApiPropertyOptional({ enum: [...RESOURCE_TYPES] })
+  @ApiPropertyOptional({ enum: RESOURCE_TYPES, enumName: 'ResourceType' })
   @IsOptional()
   @IsIn([...RESOURCE_TYPES])
-  type?: string;
+  type?: ResourceType;
 
   @ApiPropertyOptional({ description: 'Returns the laptops of this lab' })
   @IsOptional()
