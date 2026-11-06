@@ -78,8 +78,6 @@ model User {
   email       String    @unique @map("Email") @db.NVarChar(320)
   fullName    String    @map("FullName") @db.NVarChar(200)
   department  String?   @map("Department") @db.NVarChar(120)
-  // Organización de la cuenta: dominio de Google Workspace o tenant de Entra ID (si aplica)
-  tenantId    String?   @map("TenantId") @db.NVarChar(100)
   isActive    Boolean   @default(true) @map("IsActive")
   lastLoginAt DateTime? @map("LastLoginAt")
   createdAt   DateTime  @default(now()) @map("CreatedAt")

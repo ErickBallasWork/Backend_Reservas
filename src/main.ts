@@ -9,7 +9,6 @@ import { setupSwagger } from './swagger';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const { server, auth } = app.get(AppConfigService);
-  const demoMode = auth.mode === 'demo';
 
   app.setGlobalPrefix('api/v1');
   // CSP is disabled outside production so the Swagger UI loads.
@@ -20,13 +19,13 @@ async function bootstrap() {
   );
   app.useGlobalFilters(new AllExceptionsFilter());
 
-  if (server.swaggerEnabled) setupSwagger(app, demoMode);
+  if (server.swaggerEnabled) setupSwagger(app, auth.demoLoginEnabled);
 
   app.enableShutdownHooks();
   await app.listen(server.port);
   Logger.log(`API ready at http://localhost:${server.port}/api/v1`, 'Bootstrap');
   Logger.log(`Swagger at http://localhost:${server.port}/api/docs`, 'Bootstrap');
-  Logger.log(`Auth mode: ${demoMode ? 'demo (development only)' : 'google'}`, 'Bootstrap');
+  if (auth.demoLoginEnabled) Logger.warn('Demo login is enabled (development only)', 'Bootstrap');
 }
 
 void bootstrap();

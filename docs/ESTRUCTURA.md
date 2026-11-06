@@ -65,7 +65,7 @@ La base de datos local no está en este repo: el `docker-compose.yml` vive en el
 | `config/`        | `environment.ts` valida las variables al arrancar, `app-config.ts` las agrupa en `server`, `auth`, `notifications` y `jobs`, y `AppConfigService` las expone tipadas (es global). `ReservationRulesService` entrega las reglas de reserva. **Nunca se lee `process.env` fuera de aquí.**                                                            |
 | `common/`        | Piezas compartidas: `constants.ts` (roles, tipos y estados válidos), `filters/` (convierte cualquier error en `{statusCode, code, message}`), `current-user/` (decoradores `@CurrentUser()` y `@Public()`), `guards/` (`@JobEndpoint()` protege las tareas programadas con `x-job-key`), `pagination.dto.ts`, `db.types.ts` y `format.ts` (fechas). |
 | `prisma/`        | `PrismaService`: la conexión a la base. Reintenta si la base de Azure está despertando.                                                                                                                                                                                                                                                             |
-| `auth/`          | Inicio de sesión. `auth.controller.ts` (`GET /auth/config`, `POST /auth/google`, `POST /auth/demo`), `google-verifier.service.ts`, `auth.service.ts` (crea o busca el usuario y firma el JWT), `auth.guard.ts` (**guard global** de token y roles) y `roles.decorator.ts` (`@Roles('ADMIN')`).                                                      |
+| `auth/`          | Inicio de sesión. `auth.controller.ts` (`POST /auth/demo`, solo desarrollo), `auth.service.ts` (firma el JWT), `auth.guard.ts` (**guard global** de token y roles) y `roles.decorator.ts` (`@Roles('ADMIN')`).                                                                                                                                      |
 | `health/`        | `GET /health`: dice si la API y la base responden.                                                                                                                                                                                                                                                                                                  |
 | `audit/`         | Registro de auditoría (`AUDIT_LOG`): quién hizo qué y cuándo. `GET /audit` solo para ADMIN.                                                                                                                                                                                                                                                         |
 | `notifications/` | Bandeja de avisos (`NOTIFICATION`). Hoy el canal es la app (IN_APP); push y e-mail quedan pendientes y se procesan con una tarea.                                                                                                                                                                                                                   |
@@ -102,10 +102,8 @@ Archivos especiales de `reservations/`:
 | Archivo                           | Para qué sirve                                                                                                                                                          |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `docs/ESTRUCTURA.md`              | Este archivo.                                                                                                                                                           |
-| `docs/frontend-login-google.md`   | Lo que necesita el frontend para el botón de Google.                                                                                                                    |
 | `docs/sql/permisos-auditoria.sql` | Para Azure (no local): crea el usuario de la app sin permiso de editar ni borrar la auditoría, y un usuario aparte para migraciones. Lo corre quien administra la base. |
 | `tools/pruebas.http`              | Peticiones listas para la extensión REST Client: haz clic en "Send Request".                                                                                            |
-| `tools/login-google.html`         | Página para probar el login con Google sin tener el frontend.                                                                                                           |
 | `.vscode/extensions.json`         | VS Code te sugiere instalar las extensiones del proyecto al abrirlo.                                                                                                    |
 
 ## Carpetas que aparecen solas (no se suben)
@@ -120,7 +118,7 @@ Archivos especiales de `reservations/`:
 
 Ejemplo: Ana reserva la Sala Pichincha.
 
-1. El frontend llama `POST /api/v1/reservations` con el token (o `x-demo-user` en modo demo).
+1. El frontend llama `POST /api/v1/reservations` con el token.
 2. `main.ts` aplica seguridad y valida el cuerpo contra `CreateReservationDto`. Si falta un campo → 400.
 3. `auth.guard.ts` revisa quién es y si su rol puede usar esa ruta. Si no → 401 o 403.
 4. `reservations.controller.ts` recibe la petición y llama a `ReservationsService.create()`.

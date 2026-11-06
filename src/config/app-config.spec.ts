@@ -6,7 +6,6 @@ function baseEnv(overrides: Record<string, string> = {}): Record<string, string>
   return {
     DATABASE_URL: 'sqlserver://localhost:1433;database=reservas_test',
     CORS_ORIGINS: 'http://localhost:3000',
-    AUTH_MODE: 'demo',
     JWT_SECRET: SECRET,
     ALLOWED_EMAIL_DOMAINS: 'tcs.com,pichincha.com',
     ...overrides,
@@ -16,8 +15,6 @@ function baseEnv(overrides: Record<string, string> = {}): Record<string, string>
 function productionEnv(overrides: Record<string, string> = {}): Record<string, string> {
   return baseEnv({
     NODE_ENV: 'production',
-    AUTH_MODE: 'google',
-    GOOGLE_CLIENT_ID: 'client-id.apps.googleusercontent.com',
     ...overrides,
   });
 }
@@ -35,16 +32,15 @@ describe('loadAppConfig', () => {
       timeZone: 'America/Guayaquil',
     });
     expect(config.auth.jwtExpiresInSeconds).toBe(8 * 3600);
-    expect(config.auth.autoCreateUsers).toBe(true);
-    expect(config.auth.requireGoogleWorkspace).toBe(false);
+    expect(config.auth.demoLoginEnabled).toBe(false);
     expect(config.notifications.extraChannels).toEqual([]);
     expect(config.jobs.jobKey).toBeNull();
   });
 
   it('treats empty values as missing', () => {
-    const config = loadAppConfig(baseEnv({ GOOGLE_CLIENT_ID: '', JOB_KEY: '', PORT: '' }));
+    const config = loadAppConfig(baseEnv({ DEMO_LOGIN_ENABLED: '', JOB_KEY: '', PORT: '' }));
 
-    expect(config.auth.googleClientId).toBeNull();
+    expect(config.auth.demoLoginEnabled).toBe(false);
     expect(config.jobs.jobKey).toBeNull();
     expect(config.server.port).toBe(3001);
   });
@@ -63,7 +59,7 @@ describe('loadAppConfig', () => {
     expect(config.notifications.extraChannels).toEqual(['EMAIL', 'PUSH']);
   });
 
-  it.each(['DATABASE_URL', 'CORS_ORIGINS', 'AUTH_MODE', 'JWT_SECRET', 'ALLOWED_EMAIL_DOMAINS'])(
+  it.each(['DATABASE_URL', 'CORS_ORIGINS', 'JWT_SECRET', 'ALLOWED_EMAIL_DOMAINS'])(
     'rejects a missing %s',
     (name) => {
       const env = baseEnv();
@@ -73,16 +69,14 @@ describe('loadAppConfig', () => {
     },
   );
 
-  it('rejects an unknown auth mode instead of falling back to demo', () => {
-    expect(() => loadAppConfig(baseEnv({ AUTH_MODE: 'Google' }))).toThrow('AUTH_MODE');
-  });
-
   it('rejects a short JWT secret', () => {
     expect(() => loadAppConfig(baseEnv({ JWT_SECRET: 'short' }))).toThrow('JWT_SECRET');
   });
 
   it.each(['yes', '1', 'TRUE'])('rejects the non strict boolean "%s"', (value) => {
-    expect(() => loadAppConfig(baseEnv({ AUTO_CREATE_USERS: value }))).toThrow('AUTO_CREATE_USERS');
+    expect(() => loadAppConfig(baseEnv({ DEMO_LOGIN_ENABLED: value }))).toThrow(
+      'DEMO_LOGIN_ENABLED',
+    );
   });
 
   it('rejects unknown notification channels', () => {
@@ -95,20 +89,14 @@ describe('loadAppConfig', () => {
     expect(() => loadAppConfig(baseEnv({ APP_TIME_ZONE: 'Ecuador' }))).toThrow('APP_TIME_ZONE');
   });
 
-  it('requires GOOGLE_CLIENT_ID when the auth mode is google', () => {
-    expect(() => loadAppConfig(baseEnv({ AUTH_MODE: 'google' }))).toThrow('GOOGLE_CLIENT_ID');
+  it('enables the demo login only when asked outside production', () => {
+    expect(loadAppConfig(baseEnv({ DEMO_LOGIN_ENABLED: 'true' })).auth.demoLoginEnabled).toBe(true);
   });
 
-  it('rejects the demo auth mode in production', () => {
-    expect(() => loadAppConfig(productionEnv({ AUTH_MODE: 'demo' }))).toThrow(
-      'AUTH_MODE: must be "google" in production',
+  it('rejects the demo login in production', () => {
+    expect(() => loadAppConfig(productionEnv({ DEMO_LOGIN_ENABLED: 'true' }))).toThrow(
+      'DEMO_LOGIN_ENABLED: must be false in production',
     );
-  });
-
-  it('rejects a demo default user outside the demo auth mode', () => {
-    expect(() =>
-      loadAppConfig(productionEnv({ DEMO_DEFAULT_USER: 'ana.asociado@demo.com' })),
-    ).toThrow('DEMO_DEFAULT_USER');
   });
 
   it('disables swagger in production unless it is enabled explicitly', () => {
@@ -119,6 +107,6 @@ describe('loadAppConfig', () => {
   });
 
   it('reports every invalid variable at once', () => {
-    expect(() => loadAppConfig({})).toThrow(/DATABASE_URL[\s\S]*AUTH_MODE[\s\S]*JWT_SECRET/);
+    expect(() => loadAppConfig({})).toThrow(/DATABASE_URL[\s\S]*JWT_SECRET/);
   });
 });

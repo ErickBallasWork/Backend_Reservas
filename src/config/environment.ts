@@ -3,7 +3,6 @@ import { plainToInstance, Transform, type TransformFnParams, Type } from 'class-
 import {
   ArrayNotEmpty,
   IsBoolean,
-  IsEmail,
   IsFQDN,
   IsIn,
   IsInt,
@@ -15,16 +14,12 @@ import {
   Max,
   Min,
   MinLength,
-  ValidateIf,
   type ValidationError,
   validateSync,
 } from 'class-validator';
 
 export const NODE_ENVS = ['development', 'test', 'production'] as const;
 export type NodeEnv = (typeof NODE_ENVS)[number];
-
-export const AUTH_MODES = ['demo', 'google'] as const;
-export type AuthMode = (typeof AUTH_MODES)[number];
 
 export const EXTRA_NOTIFICATION_CHANNELS = ['PUSH', 'EMAIL'] as const;
 export type ExtraNotificationChannel = (typeof EXTRA_NOTIFICATION_CHANNELS)[number];
@@ -74,9 +69,6 @@ export class EnvironmentVariables {
   @IsNotEmpty()
   DATABASE_URL!: string;
 
-  @IsIn(AUTH_MODES)
-  AUTH_MODE!: AuthMode;
-
   @IsString()
   @MinLength(MIN_SECRET_LENGTH)
   JWT_SECRET!: string;
@@ -87,15 +79,6 @@ export class EnvironmentVariables {
   @Max(24)
   JWT_EXPIRES_HOURS = 8;
 
-  @ValidateIf((env: EnvironmentVariables) => env.AUTH_MODE === 'google')
-  @IsString()
-  @IsNotEmpty()
-  GOOGLE_CLIENT_ID?: string;
-
-  @Transform(toBoolean)
-  @IsBoolean()
-  GOOGLE_REQUIRE_HD = false;
-
   @Transform(toList((domain) => domain.toLowerCase()))
   @ArrayNotEmpty()
   @IsFQDN({}, { each: true })
@@ -103,11 +86,7 @@ export class EnvironmentVariables {
 
   @Transform(toBoolean)
   @IsBoolean()
-  AUTO_CREATE_USERS = true;
-
-  @IsOptional()
-  @IsEmail()
-  DEMO_DEFAULT_USER?: string;
+  DEMO_LOGIN_ENABLED = false;
 
   @Transform(toList((channel) => channel.toUpperCase()))
   @IsIn(EXTRA_NOTIFICATION_CHANNELS, { each: true })
@@ -131,11 +110,8 @@ function describe(errors: ValidationError[]): string[] {
 
 function crossFieldErrors(env: EnvironmentVariables): string[] {
   const errors: string[] = [];
-  if (env.NODE_ENV === 'production' && env.AUTH_MODE !== 'google') {
-    errors.push('AUTH_MODE: must be "google" in production');
-  }
-  if (env.DEMO_DEFAULT_USER && env.AUTH_MODE !== 'demo') {
-    errors.push('DEMO_DEFAULT_USER: only allowed when AUTH_MODE is "demo"');
+  if (env.NODE_ENV === 'production' && env.DEMO_LOGIN_ENABLED) {
+    errors.push('DEMO_LOGIN_ENABLED: must be false in production');
   }
   return errors;
 }

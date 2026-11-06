@@ -1,13 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 import { ROLES, type Role } from '../../common/constants';
-
-export class AuthConfigResponseDto {
-  @ApiProperty({ enum: ['demo', 'google'] })
-  authMode!: 'demo' | 'google';
-
-  @ApiProperty({ type: String, nullable: true })
-  googleClientId!: string | null;
-}
 
 export class CurrentUserResponseDto {
   @ApiProperty({ format: 'uuid' })
@@ -38,9 +30,4 @@ export class SessionResponseDto {
 
   @ApiProperty({ type: CurrentUserResponseDto })
   user!: CurrentUserResponseDto;
-}
-
-export class GoogleSessionResponseDto extends SessionResponseDto {
-  @ApiPropertyOptional({ type: String, nullable: true })
-  googleWorkspaceDomain?: string | null;
 }

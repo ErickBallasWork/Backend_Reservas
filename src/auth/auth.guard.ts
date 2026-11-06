@@ -10,7 +10,6 @@ import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { IS_PUBLIC_KEY } from '../common/current-user/public.decorator';
-import { AppConfigService } from '../config/app-config.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtPayload } from './auth.service';
 import { toCurrentUser, USER_WITH_ROLES } from './current-user.mapper';
@@ -22,7 +21,6 @@ export class AuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
-    private readonly appConfig: AppConfigService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -58,21 +56,14 @@ export class AuthGuard implements CanActivate {
           message: 'Tu sesión no es válida o expiró. Inicia sesión de nuevo.',
         });
       }
-      return this.loadUser({ id: payload.sub });
-    }
-
-    const { mode, demoDefaultUser } = this.appConfig.auth;
-    if (mode === 'demo') {
-      const demo = request.headers['x-demo-user'];
-      const email = (Array.isArray(demo) ? demo[0] : demo) || demoDefaultUser;
-      if (email) return this.loadUser({ email: email.trim().toLowerCase() });
+      return this.loadUser(payload.sub);
     }
 
     throw new UnauthorizedException({ code: 'NO_TOKEN', message: 'Inicia sesión para continuar' });
   }
 
-  private async loadUser(where: { id: string } | { email: string }): Promise<CurrentUserData> {
-    const user = await this.prisma.user.findUnique({ where, include: USER_WITH_ROLES });
+  private async loadUser(id: string): Promise<CurrentUserData> {
+    const user = await this.prisma.user.findUnique({ where: { id }, include: USER_WITH_ROLES });
     if (!user) {
       throw new UnauthorizedException({ code: 'UNKNOWN_USER', message: 'El usuario no existe' });
     }

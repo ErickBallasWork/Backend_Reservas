@@ -26,7 +26,7 @@ npm run db:seed:demo      # datos demo: edificios, salas, laboratorio, laptops y
 npm run start:dev         # API en http://localhost:3001/api/v1
 ```
 
-- Swagger: http://localhost:3001/api/docs → **Authorize** → `demo-user` → escribe un correo demo.
+- Swagger: http://localhost:3001/api/docs → `POST /auth/demo` con un correo demo → **Authorize** → pega el `accessToken`.
 - Peticiones listas para probar: `tools/pruebas.http` (extensión REST Client de VS Code).
 - Ver las tablas y los datos: `npm run db:studio`.
 
@@ -35,26 +35,22 @@ npm run start:dev         # API en http://localhost:3001/api/v1
 La API valida todas las variables al arrancar y se niega a iniciar si alguna falta o es inválida. El
 mensaje lista cada problema.
 
-| Variable                | Obligatoria  | Por defecto          | Secreta | Descripción                                                                                      |
-| ----------------------- | ------------ | -------------------- | ------- | ------------------------------------------------------------------------------------------------ |
-| `NODE_ENV`              | no           | `development`        | no      | `development`, `test` o `production`                                                             |
-| `PORT`                  | no           | `3001`               | no      | Puerto HTTP                                                                                      |
-| `CORS_ORIGINS`          | sí           | —                    | no      | Orígenes del frontend separados por coma, con protocolo                                          |
-| `SWAGGER_ENABLED`       | no           | `true` fuera de prod | no      | `true` o `false`. En producción está apagado salvo que se ponga `true`                           |
-| `APP_TIME_ZONE`         | no           | `America/Guayaquil`  | no      | Zona IANA para los textos de los avisos                                                          |
-| `DATABASE_URL`          | sí           | —                    | **sí**  | Cadena de conexión de Prisma a SQL Server                                                        |
-| `AUTH_MODE`             | sí           | —                    | no      | `demo` (solo desarrollo) o `google`. En producción debe ser `google`                             |
-| `JWT_SECRET`            | sí           | —                    | **sí**  | Mínimo 32 caracteres. `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
-| `JWT_EXPIRES_HOURS`     | no           | `8`                  | no      | Duración de la sesión, de 1 a 24                                                                 |
-| `GOOGLE_CLIENT_ID`      | con `google` | —                    | no      | Client ID de OAuth "Web application"                                                             |
-| `GOOGLE_REQUIRE_HD`     | no           | `false`              | no      | `true` exige cuenta de Google Workspace del dominio                                              |
-| `ALLOWED_EMAIL_DOMAINS` | sí           | —                    | no      | Dominios permitidos separados por coma, por ejemplo `tcs.com,pichincha.com`                      |
-| `AUTO_CREATE_USERS`     | no           | `true`               | no      | `false`: solo entran usuarios dados de alta por un ADMIN                                         |
-| `DEMO_DEFAULT_USER`     | no           | —                    | no      | Solo con `AUTH_MODE=demo`: usuario para peticiones sin credenciales                              |
-| `NOTIFY_CHANNELS`       | no           | vacío                | no      | Canales extra a la bandeja: `PUSH`, `EMAIL` o ambos                                              |
-| `JOB_KEY`               | no           | —                    | **sí**  | Si se define (mínimo 32), las tareas programadas exigen la cabecera `x-job-key`                  |
-| `INITIAL_ADMIN_EMAIL`   | solo seed    | —                    | no      | Administrador que crea `npm run db:seed`                                                         |
-| `INITIAL_ADMIN_NAME`    | solo seed    | el correo            | no      | Nombre del administrador inicial                                                                 |
+| Variable                | Obligatoria | Por defecto          | Secreta | Descripción                                                                                      |
+| ----------------------- | ----------- | -------------------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `NODE_ENV`              | no          | `development`        | no      | `development`, `test` o `production`                                                             |
+| `PORT`                  | no          | `3001`               | no      | Puerto HTTP                                                                                      |
+| `CORS_ORIGINS`          | sí          | —                    | no      | Orígenes del frontend separados por coma, con protocolo                                          |
+| `SWAGGER_ENABLED`       | no          | `true` fuera de prod | no      | `true` o `false`. En producción está apagado salvo que se ponga `true`                           |
+| `APP_TIME_ZONE`         | no          | `America/Guayaquil`  | no      | Zona IANA para los textos de los avisos                                                          |
+| `DATABASE_URL`          | sí          | —                    | **sí**  | Cadena de conexión de Prisma a SQL Server                                                        |
+| `JWT_SECRET`            | sí          | —                    | **sí**  | Mínimo 32 caracteres. `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
+| `JWT_EXPIRES_HOURS`     | no          | `8`                  | no      | Duración de la sesión, de 1 a 24                                                                 |
+| `ALLOWED_EMAIL_DOMAINS` | sí          | —                    | no      | Dominios permitidos separados por coma, por ejemplo `tcs.com,pichincha.com`                      |
+| `DEMO_LOGIN_ENABLED`    | no          | `false`              | no      | `true` habilita `POST /auth/demo` (solo desarrollo). La API no arranca así en producción         |
+| `NOTIFY_CHANNELS`       | no          | vacío                | no      | Canales extra a la bandeja: `PUSH`, `EMAIL` o ambos                                              |
+| `JOB_KEY`               | no          | —                    | **sí**  | Si se define (mínimo 32), las tareas programadas exigen la cabecera `x-job-key`                  |
+| `INITIAL_ADMIN_EMAIL`   | solo seed   | —                    | no      | Administrador que crea `npm run db:seed`                                                         |
+| `INITIAL_ADMIN_NAME`    | solo seed   | el correo            | no      | Nombre del administrador inicial                                                                 |
 
 Las reglas de reserva (franjas de 30 min, 24 h de anticipación, 48 h máximo, ventana de check-in) ya no
 van en el entorno: viven en `src/config/reservation-rules.service.ts` y más adelante se administrarán
@@ -64,14 +60,14 @@ desde el panel del ADMIN.
 
 Al configurar Azure (App Settings), actualiza estos nombres:
 
-| Antes                                                                                                                    | Ahora                                           |
-| ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
-| `FRONTEND_URL`                                                                                                           | `CORS_ORIGINS`                                  |
-| `ENABLE_SWAGGER`                                                                                                         | `SWAGGER_ENABLED`                               |
-| `DEFAULT_DEMO_USER`                                                                                                      | `DEMO_DEFAULT_USER`                             |
-| `SLOT_MINUTES`, `MIN_ADVANCE_HOURS`, `MAX_DURATION_HOURS`, `CANCEL_MIN_HOURS`, `CHECKIN_BEFORE_MIN`, `CHECKIN_AFTER_MIN` | se eliminan                                     |
-| `DB_SA_PASSWORD`                                                                                                         | se elimina (pertenece al compose del workspace) |
-| —                                                                                                                        | `WEBSITES_PORT=3001` en App Service             |
+| Antes                                                                                                                    | Ahora                                              |
+| ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
+| `FRONTEND_URL`                                                                                                           | `CORS_ORIGINS`                                     |
+| `ENABLE_SWAGGER`                                                                                                         | `SWAGGER_ENABLED`                                  |
+| `DEFAULT_DEMO_USER`, `AUTH_MODE`, `DEMO_DEFAULT_USER`, `AUTO_CREATE_USERS`, `GOOGLE_CLIENT_ID`, `GOOGLE_REQUIRE_HD`      | se eliminan (ADR-023). Nuevo: `DEMO_LOGIN_ENABLED` |
+| `SLOT_MINUTES`, `MIN_ADVANCE_HOURS`, `MAX_DURATION_HOURS`, `CANCEL_MIN_HOURS`, `CHECKIN_BEFORE_MIN`, `CHECKIN_AFTER_MIN` | se eliminan                                        |
+| `DB_SA_PASSWORD`                                                                                                         | se elimina (pertenece al compose del workspace)    |
+| —                                                                                                                        | `WEBSITES_PORT=3001` en App Service                |
 
 ## Comandos
 
@@ -95,7 +91,7 @@ Cada commit pasa por husky: `lint-staged` formatea y corrige los archivos en sta
 Si cambias `prisma/schema.prisma`: `npm run db:migrate -- --name <cambio_en_ingles>` y sube la carpeta
 nueva de `prisma/migrations`. Las migraciones ya aplicadas no se editan.
 
-## Usuarios demo (`AUTH_MODE=demo`)
+## Usuarios demo (`DEMO_LOGIN_ENABLED=true`)
 
 | Correo                   | Roles                                          |
 | ------------------------ | ---------------------------------------------- |
@@ -107,17 +103,14 @@ nueva de `prisma/migrations`. Las migraciones ya aplicadas no se editan.
 
 ## Inicio de sesión
 
-- `AUTH_MODE=demo` (desarrollo): cabecera `x-demo-user` o `POST /auth/demo`. La API no arranca así en
-  producción.
-- `AUTH_MODE=google`: botón de Google en el frontend → `POST /auth/google` → la API verifica el token de
-  Google, revisa que el correo sea de `ALLOWED_EMAIL_DOMAINS` y entrega su propio token (JWT). Detalle en
-  `docs/frontend-login-google.md`.
+- Desarrollo (`DEMO_LOGIN_ENABLED=true`): `POST /auth/demo` con el correo de un usuario del seed devuelve el token. La API no arranca así en producción.
+- Producción: el acceso es por solicitud aprobada por el SUPERADMIN (ADR-023). Se construye en S3.
 
 ## Docker y despliegue
 
 ```bash
 docker build -t backend-reservas .
-docker run -p 3001:3001 -e DATABASE_URL="..." -e JWT_SECRET="..." -e AUTH_MODE=google ... backend-reservas
+docker run -p 3001:3001 -e DATABASE_URL="..." -e JWT_SECRET="..." ... backend-reservas
 ```
 
 - La imagen escucha en el puerto **3001**.

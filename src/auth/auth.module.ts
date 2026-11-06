@@ -5,7 +5,6 @@ import { AppConfigService } from '../config/app-config.service';
 import { AuthController } from './auth.controller';
 import { AuthGuard } from './auth.guard';
 import { AuthService } from './auth.service';
-import { GoogleVerifierService } from './google-verifier.service';
 
 @Module({
   imports: [
@@ -18,6 +17,6 @@ import { GoogleVerifierService } from './google-verifier.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, GoogleVerifierService, { provide: APP_GUARD, useClass: AuthGuard }],
+  providers: [AuthService, { provide: APP_GUARD, useClass: AuthGuard }],
 })
 export class AuthModule {}

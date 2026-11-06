@@ -1,5 +1,4 @@
 import {
-  type AuthMode,
   type EnvironmentVariables,
   type ExtraNotificationChannel,
   type NodeEnv,
@@ -16,14 +15,10 @@ export interface ServerConfig {
 }
 
 export interface AuthConfig {
-  mode: AuthMode;
   jwtSecret: string;
   jwtExpiresInSeconds: number;
-  googleClientId: string | null;
-  requireGoogleWorkspace: boolean;
   allowedEmailDomains: string[];
-  autoCreateUsers: boolean;
-  demoDefaultUser: string | null;
+  demoLoginEnabled: boolean;
 }
 
 export interface NotificationsConfig {
@@ -55,14 +50,10 @@ export function toAppConfig(env: EnvironmentVariables): AppConfig {
       timeZone: env.APP_TIME_ZONE,
     },
     auth: {
-      mode: env.AUTH_MODE,
       jwtSecret: env.JWT_SECRET,
       jwtExpiresInSeconds: env.JWT_EXPIRES_HOURS * SECONDS_PER_HOUR,
-      googleClientId: env.GOOGLE_CLIENT_ID ?? null,
-      requireGoogleWorkspace: env.GOOGLE_REQUIRE_HD,
       allowedEmailDomains: env.ALLOWED_EMAIL_DOMAINS,
-      autoCreateUsers: env.AUTO_CREATE_USERS,
-      demoDefaultUser: env.DEMO_DEFAULT_USER?.toLowerCase() ?? null,
+      demoLoginEnabled: env.DEMO_LOGIN_ENABLED,
     },
     notifications: { extraChannels: env.NOTIFY_CHANNELS },
     jobs: { jobKey: env.JOB_KEY ?? null },

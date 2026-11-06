@@ -26,8 +26,6 @@ const DOCUMENTED_OPERATIONS: [string, string][] = [
   ['get', '/resources/{id}'],
   ['post', '/resources'],
   ['patch', '/resources/{id}'],
-  ['get', '/auth/config'],
-  ['post', '/auth/google'],
   ['post', '/auth/demo'],
 ];
 
