@@ -15,5 +15,8 @@ until npx prisma migrate deploy; do
   sleep 15
 done
 
-echo "Migrations completed successfully. Starting NestJS application..."
+echo "Migrations completed successfully. Seeding roles and initial SUPERADMIN..."
+node dist-seed/prisma/seed.js
+
+echo "Seed completed. Starting NestJS application..."
 exec node dist/main.js
