@@ -89,3 +89,26 @@ export const NOTIFICATION_TYPES = [
   'TRAINING_EXPIRED',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+
+export const FLOOR_ZONE_KINDS = ['ROOM', 'LAB', 'DECORATIVE', 'LABEL'] as const;
+export type FloorZoneKind = (typeof FLOOR_ZONE_KINDS)[number];
+
+export const FLOOR_RESOURCE_TYPES = ['MEETING_ROOM', 'AI_LAB'] as const;
+export type FloorResourceType = (typeof FLOOR_RESOURCE_TYPES)[number];
+
+export const RESOURCE_TYPE_BY_ZONE_KIND: Partial<Record<FloorZoneKind, FloorResourceType>> = {
+  ROOM: 'MEETING_ROOM',
+  LAB: 'AI_LAB',
+};
+
+export const FLOOR_STATES = [
+  'FREE',
+  'OCCUPIED',
+  'MINE',
+  'OUT_OF_FILTER',
+  'NOT_RESERVABLE',
+] as const;
+export type FloorState = (typeof FLOOR_STATES)[number];
+
+export const FLOOR_STATE_REASONS = ['TYPE', 'CAPACITY', 'CLOSED', 'INACTIVE'] as const;
+export type FloorStateReason = (typeof FLOOR_STATE_REASONS)[number];

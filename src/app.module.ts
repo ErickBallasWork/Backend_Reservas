@@ -7,6 +7,7 @@ import { AvailabilityModule } from './availability/availability.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { AppConfigModule } from './config/app-config.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { FloorPlansModule } from './floor-plans/floor-plans.module';
 import { HealthModule } from './health/health.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { OperatingHoursModule } from './operating-hours/operating-hours.module';
@@ -32,6 +33,7 @@ import { UsersModule } from './users/users.module';
     CatalogModule,
     OperatingHoursModule,
     AvailabilityModule,
+    FloorPlansModule,
     SanctionsModule,
     ReservationsModule,
     ApprovalsModule,

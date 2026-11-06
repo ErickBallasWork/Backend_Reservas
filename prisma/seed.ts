@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { ROLES } from '../src/common/constants';
 import { readSeedEnvironment } from './seed-environment';
+import { seedFloorPlans } from './seed-floor-plans';
 
 const { initialSuperadmin } = readSeedEnvironment();
 const prisma = new PrismaClient();
@@ -9,6 +10,7 @@ async function main() {
   for (const name of ROLES) {
     await prisma.role.upsert({ where: { name }, update: {}, create: { name } });
   }
+  await seedFloorPlans(prisma);
 
   if (!initialSuperadmin) {
     console.warn('Roles ready. INITIAL_SUPERADMIN_EMAIL is not set, so no SUPERADMIN was created.');

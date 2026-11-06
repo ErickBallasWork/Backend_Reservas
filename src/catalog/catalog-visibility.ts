@@ -10,3 +10,7 @@ export function assertMayListInactive(actor: CurrentUserData, includeInactive?: 
     });
   }
 }
+
+export function isPrivileged(actor: CurrentUserData): boolean {
+  return actor.roles.some((role) => PRIVILEGED_ROLES.includes(role));
+}

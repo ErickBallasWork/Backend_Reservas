@@ -10,7 +10,8 @@ import {
 } from '../operating-hours/operating-calendar';
 import { OperatingHoursService } from '../operating-hours/operating-hours.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { buildSlotStarts, chunk } from '../reservations/time-rules';
+import { buildSlotStarts } from '../reservations/time-rules';
+import { BusySlotsReader } from './busy-slots.reader';
 import { RangeQueryDto, SearchAvailabilityQueryDto } from './dto/availability.dto';
 
 const MAX_RANGE_DAYS = 14;
@@ -22,6 +23,7 @@ export class AvailabilityService {
     private readonly reservationRules: ReservationRulesService,
     private readonly lookup: CatalogLookupService,
     private readonly operatingHours: OperatingHoursService,
+    private readonly busySlots: BusySlotsReader,
   ) {}
 
   private parseRange(query: RangeQueryDto) {
@@ -40,21 +42,6 @@ export class AvailabilityService {
       });
     }
     return { from, to };
-  }
-
-  private async busyByResource(resourceIds: string[], from: Date, to: Date) {
-    const busy = new Map<string, string[]>();
-    for (const id of resourceIds) busy.set(id, []);
-    // Chunked to stay under the SQL Server 2100 parameter limit.
-    for (const ids of chunk(resourceIds, 500)) {
-      const slots = await this.prisma.reservationSlot.findMany({
-        where: { resourceId: { in: ids }, slotStart: { gte: from, lt: to } },
-        select: { resourceId: true, slotStart: true },
-        orderBy: { slotStart: 'asc' },
-      });
-      for (const slot of slots) busy.get(slot.resourceId)?.push(slot.slotStart.toISOString());
-    }
-    return busy;
   }
 
   private rangeSlots(from: Date, to: Date) {
@@ -78,7 +65,7 @@ export class AvailabilityService {
         message: `No existe el recurso ${resourceId}`,
       });
     }
-    const busy = await this.busyByResource(
+    const busy = await this.busySlots.byResource(
       [resource.id, ...resource.children.map((c) => c.id)],
       from,
       to,
@@ -129,7 +116,7 @@ export class AvailabilityService {
 
     const ids = resources.flatMap((r) => [r.id, ...r.children.map((c) => c.id)]);
     const busy =
-      ids.length > 0 ? await this.busyByResource(ids, from, to) : new Map<string, string[]>();
+      ids.length > 0 ? await this.busySlots.byResource(ids, from, to) : new Map<string, string[]>();
     const isFree = (id: string) => (busy.get(id) ?? []).length === 0;
     const { slotMinutes, slots } = this.rangeSlots(from, to);
     const book = await this.operatingHours.loadBook();

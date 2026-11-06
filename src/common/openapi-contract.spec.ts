@@ -17,6 +17,9 @@ import { BuildingsController } from '../catalog/buildings.controller';
 import { BuildingsService } from '../catalog/buildings.service';
 import { CatalogController } from '../catalog/catalog.controller';
 import { CatalogTreeService } from '../catalog/catalog-tree.service';
+import { FloorPlanStatusService } from '../floor-plans/floor-plan-status.service';
+import { FloorPlansController } from '../floor-plans/floor-plans.controller';
+import { FloorPlansService } from '../floor-plans/floor-plans.service';
 import { ResourcesController } from '../catalog/resources.controller';
 import { ResourcesService } from '../catalog/resources.service';
 import { AppConfigService } from '../config/app-config.service';
@@ -106,6 +109,12 @@ const DOCUMENTED_OPERATIONS: [string, string][] = [
   ['get', '/notifications/push-config'],
   ['put', '/notifications/push-subscription'],
   ['delete', '/notifications/push-subscription'],
+  ['get', '/floor-plans'],
+  ['get', '/floor-plans/{id}'],
+  ['post', '/floor-plans'],
+  ['patch', '/floor-plans/{id}'],
+  ['put', '/floor-plans/{id}/zones'],
+  ['get', '/floor-plans/{id}/status'],
 ];
 
 function sourceFiles(dir: string): string[] {
@@ -139,6 +148,7 @@ describe('OpenAPI contract', () => {
         ReallocationsController,
         SanctionsController,
         NotificationsController,
+        FloorPlansController,
       ],
       providers: [
         { provide: AuthService, useValue: {} },
@@ -163,6 +173,8 @@ describe('OpenAPI contract', () => {
         { provide: RemindersService, useValue: {} },
         { provide: PushSubscriptionsService, useValue: {} },
         { provide: PushDispatcherService, useValue: {} },
+        { provide: FloorPlansService, useValue: {} },
+        { provide: FloorPlanStatusService, useValue: {} },
         { provide: PrismaService, useValue: {} },
       ],
     }).compile();
@@ -201,6 +213,19 @@ describe('OpenAPI contract', () => {
     expect(serialize('ReservationResponseDto')).toContain('#/components/schemas/ReservationStatus');
     expect(schemas.ReservationStatus).toMatchObject({ enum: [...RESERVATION_STATUSES] });
     expect(schemas.ResourceType).toMatchObject({ enum: ['MEETING_ROOM', 'AI_LAB', 'LAPTOP'] });
+  });
+
+  it('publishes the floor plan enums by name', () => {
+    const schemas = document.components?.schemas ?? {};
+    const serialize = (name: string) => JSON.stringify(schemas[name]);
+
+    expect(serialize('FloorZoneDto')).toContain('#/components/schemas/FloorZoneKind');
+    expect(serialize('FloorZoneResourceDto')).toContain('#/components/schemas/FloorResourceType');
+    expect(schemas.FloorZoneKind).toMatchObject({ enum: ['ROOM', 'LAB', 'DECORATIVE', 'LABEL'] });
+    expect(schemas.FloorResourceType).toMatchObject({ enum: ['MEETING_ROOM', 'AI_LAB'] });
+    expect(serialize('FloorZoneStatusDto')).toContain('#/components/schemas/FloorState');
+    expect(serialize('FloorZoneStatusDto')).toContain('#/components/schemas/FloorStateReason');
+    expect(serialize('FloorSeatStatusDto')).toContain('#/components/schemas/FloorState');
   });
 });
 

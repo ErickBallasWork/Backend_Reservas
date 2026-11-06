@@ -34,8 +34,9 @@ model Building {
   isActive  Boolean  @default(true) @map("IsActive")
   createdAt DateTime @default(now()) @map("CreatedAt")
 
-  resources Resource[]
-  userRoles UserRole[]
+  resources  Resource[]
+  userRoles  UserRole[]
+  floorPlans FloorPlan[]
 
   @@map("BUILDING")
 }
@@ -67,6 +68,7 @@ model Resource {
   operatingHours    OperatingHours[]
   closedDates       ClosedDate[]
   series            ReservationSeries[]
+  floorZones        FloorZone[]
 
   @@unique([buildingId, name])
   @@index([type])
@@ -98,6 +100,46 @@ model ClosedDate {
 
   @@unique([resourceId, date])
   @@map("CLOSED_DATE")
+}
+
+model FloorPlan {
+  id         String   @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  buildingId String   @map("BuildingId") @db.UniqueIdentifier
+  level      Int      @default(0) @map("Level")
+  name       String   @map("Name") @db.NVarChar(150)
+  width      Int      @map("Width")
+  height     Int      @map("Height")
+  isActive   Boolean  @default(true) @map("IsActive")
+  createdAt  DateTime @default(now()) @map("CreatedAt")
+  updatedAt  DateTime @updatedAt @map("UpdatedAt")
+
+  building Building    @relation(fields: [buildingId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  zones    FloorZone[]
+
+  @@unique([buildingId, level])
+  @@map("FLOOR_PLAN")
+}
+
+model FloorZone {
+  id           String   @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  floorPlanId  String   @map("FloorPlanId") @db.UniqueIdentifier
+  name         String   @map("Name") @db.NVarChar(100)
+  kind         String   @map("Kind") @db.NVarChar(20)
+  x            Int      @map("X")
+  y            Int      @map("Y")
+  width        Int      @map("Width")
+  height       Int      @map("Height")
+  isReservable Boolean  @default(false) @map("IsReservable")
+  resourceId   String?  @map("ResourceId") @db.UniqueIdentifier
+  sortOrder    Int      @default(0) @map("SortOrder")
+  createdAt    DateTime @default(now()) @map("CreatedAt")
+  updatedAt    DateTime @updatedAt @map("UpdatedAt")
+
+  floorPlan FloorPlan @relation(fields: [floorPlanId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  resource  Resource? @relation(fields: [resourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([floorPlanId])
+  @@map("FLOOR_ZONE")
 }
 
 // ---------------- Usuarios y roles ----------------

@@ -61,16 +61,15 @@ Authorization: Bearer {{token_ana}}
 GET {{api}}/resources
 Authorization: Bearer {{token_ana}}
 
-@salaId = {{recursos.response.body.$[?(@.name == 'Sala Pichincha')].id}}
-@salaCotopaxiId = {{recursos.response.body.$[?(@.name == 'Sala Cotopaxi')].id}}
-@labId = {{recursos.response.body.$[?(@.name == 'Laboratorio IA 1')].id}}
-@laptopId = {{recursos.response.body.$[?(@.name == 'LAP-IA-01')].id}}
+@salaId = {{recursos.response.body.$[?(@.name == 'Sala Board' && @.building.name == 'Amazonas Plaza')].id}}
+@labId = {{recursos.response.body.$[?(@.name == 'Laboratorio IA')].id}}
+@laptopId = {{recursos.response.body.$[?(@.name == 'AMZ-LAP-01')].id}}
 
 ### 5. ¿Qué está libre ese día?
 GET {{api}}/availability/search?from={{dia}}T13:00:00Z&to={{dia}}T23:00:00Z&type=MEETING_ROOM
 Authorization: Bearer {{token_ana}}
 
-### 6. Ana reserva la Sala Pichincha (queda CONFIRMED)
+### 6. Ana reserva la Sala Board de Amazonas Plaza (queda CONFIRMED)
 # @name reservaSala
 POST {{api}}/reservations
 Authorization: Bearer {{token_ana}}
@@ -151,14 +150,15 @@ Content-Type: application/json
   "comments": "Adelante"
 }
 
-### 13. El SPOC de Edificio mueve la reserva de Ana a la Sala Cotopaxi
+### 13. El SPOC de Edificio mueve la reserva de Ana a otra hora
 POST {{api}}/reservations/{{reservaSala.response.body.id}}/reallocate
 Authorization: Bearer {{token_carlos}}
 Content-Type: application/json
 
 {
-  "newResourceId": "{{salaCotopaxiId}}",
-  "justification": "Visita de cliente en la Sala Pichincha"
+  "newStartDateTime": "{{dia}}T16:00:00Z",
+  "newEndDateTime": "{{dia}}T17:00:00Z",
+  "justification": "Visita de cliente en la Sala Board"
 }
 
 ### 14. Bandeja de avisos de Ana (debe tener los avisos de confirmación y reasignación)
@@ -184,3 +184,18 @@ Authorization: Bearer {{token_admin}}
 ### 19. Auditoría (Administrador)
 GET {{api}}/audit
 Authorization: Bearer {{token_admin}}
+
+### 20. Planos de piso
+# @name planos
+GET {{api}}/floor-plans
+Authorization: Bearer {{token_ana}}
+
+@planoId = {{planos.response.body.$[?(@.buildingName == 'Amazonas Plaza')].id}}
+
+### 21. Plano con sus zonas y laptops
+GET {{api}}/floor-plans/{{planoId}}
+Authorization: Bearer {{token_ana}}
+
+### 22. Estado del plano en una franja (máximo 48 h)
+GET {{api}}/floor-plans/{{planoId}}/status?from={{dia}}T15:00:00Z&to={{dia}}T18:00:00Z
+Authorization: Bearer {{token_ana}}

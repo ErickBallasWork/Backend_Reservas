@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
-import { ROLES } from '../src/common/constants';
+import { BLOCKING_STATUSES, ROLES } from '../src/common/constants';
 import { readSeedEnvironment } from './seed-environment';
+import { AMAZONAS_PLAZA, seedFloorPlans } from './seed-floor-plans';
 
 if (readSeedEnvironment().isProduction) {
   throw new Error('The demo seed never runs in production. Use "npm run db:seed".');
@@ -8,20 +9,30 @@ if (readSeedEnvironment().isProduction) {
 
 const prisma = new PrismaClient();
 
-async function upsertResource(data: {
-  buildingId: string;
-  type: 'MEETING_ROOM' | 'AI_LAB' | 'LAPTOP';
-  name: string;
-  capacity?: number;
-  equipment?: string;
-  parentResourceId?: string;
-  assetTag?: string;
-}) {
-  return prisma.resource.upsert({
-    where: { buildingId_name: { buildingId: data.buildingId, name: data.name } },
-    update: {},
-    create: data,
+const LEGACY_DEMO_BUILDINGS = ['Edificio Quito Norte', 'Edificio Guayaquil Centro'];
+
+async function deactivateLegacyBuildings() {
+  const legacy = await prisma.building.findMany({
+    where: { name: { in: LEGACY_DEMO_BUILDINGS }, isActive: true },
+    select: { id: true, name: true },
   });
+  for (const building of legacy) {
+    const futureReservations = await prisma.reservation.count({
+      where: {
+        resource: { buildingId: building.id },
+        status: { in: BLOCKING_STATUSES },
+        endDateTime: { gt: new Date() },
+      },
+    });
+    await prisma.resource.updateMany({
+      where: { buildingId: building.id },
+      data: { isActive: false },
+    });
+    await prisma.building.update({ where: { id: building.id }, data: { isActive: false } });
+    console.warn(
+      `${building.name} and its resources were deactivated. Future blocking reservations on them: ${futureReservations}.`,
+    );
+  }
 }
 
 async function main() {
@@ -32,65 +43,9 @@ async function main() {
     (await prisma.role.findMany()).map((r) => [r.name, r.id]),
   );
 
-  const quito = await prisma.building.upsert({
-    where: { name: 'Edificio Quito Norte' },
-    update: {},
-    create: { name: 'Edificio Quito Norte', address: 'Av. Amazonas y Naciones Unidas, Quito' },
-  });
-  const guayaquil = await prisma.building.upsert({
-    where: { name: 'Edificio Guayaquil Centro' },
-    update: {},
-    create: { name: 'Edificio Guayaquil Centro', address: 'Av. 9 de Octubre, Guayaquil' },
-  });
-
-  await upsertResource({
-    buildingId: quito.id,
-    type: 'MEETING_ROOM',
-    name: 'Sala Pichincha',
-    capacity: 8,
-    equipment: 'Pantalla, pizarra',
-  });
-  await upsertResource({
-    buildingId: quito.id,
-    type: 'MEETING_ROOM',
-    name: 'Sala Cotopaxi',
-    capacity: 12,
-    equipment: 'Proyector, videoconferencia',
-  });
-  await upsertResource({
-    buildingId: quito.id,
-    type: 'MEETING_ROOM',
-    name: 'Sala Chimborazo',
-    capacity: 6,
-    equipment: 'Pantalla',
-  });
-  await upsertResource({
-    buildingId: guayaquil.id,
-    type: 'MEETING_ROOM',
-    name: 'Sala Malecón',
-    capacity: 10,
-    equipment: 'Proyector',
-  });
-
-  const lab = await upsertResource({
-    buildingId: quito.id,
-    type: 'AI_LAB',
-    name: 'Laboratorio IA 1',
-    capacity: 10,
-    equipment: 'Laptops con GPU, pantalla grande',
-  });
-  for (let i = 1; i <= 5; i++) {
-    const code = `LAP-IA-0${i}`;
-    await upsertResource({
-      buildingId: quito.id,
-      type: 'LAPTOP',
-      name: code,
-      capacity: 1,
-      equipment: 'Core i7, 32 GB RAM, GPU RTX 4060',
-      parentResourceId: lab.id,
-      assetTag: `TCS-${code}`,
-    });
-  }
+  const buildingIds = await seedFloorPlans(prisma);
+  const spocBuildingId = buildingIds.get(AMAZONAS_PLAZA) ?? null;
+  await deactivateLegacyBuildings();
 
   const users = [
     {
@@ -137,14 +92,12 @@ async function main() {
       data: u.roles.map((role) => ({
         userId: user.id,
         roleId: roleIds.get(role)!,
-        buildingId: role === 'SPOC_EDIFICIO' ? quito.id : null,
+        buildingId: role === 'SPOC_EDIFICIO' ? spocBuildingId : null,
       })),
     });
   }
 
-  console.log(
-    'Demo data ready: 6 roles, 2 buildings, 4 rooms, 1 lab with 5 laptops and 6 demo users.',
-  );
+  console.log('Demo data ready: 6 roles, the floor plan buildings and 6 demo users.');
 }
 
 main()
