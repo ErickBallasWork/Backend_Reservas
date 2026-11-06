@@ -108,6 +108,6 @@ export class ApprovalsService {
       );
     });
 
-    return this.reservations.get(reservationId);
+    return this.reservations.getById(reservationId);
   }
 }

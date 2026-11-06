@@ -28,9 +28,13 @@ export class ReservationsController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Ver una reserva con sus aprobaciones, reasignaciones y check-in' })
-  get(@Param('id', ParseUUIDPipe) id: string) {
-    return this.reservations.get(id);
+  @ApiOperation({
+    summary: 'Ver una reserva con sus aprobaciones, reasignaciones y check-in',
+    description:
+      'Solo la ve su dueño, un ADMIN o SUPERADMIN, el SPOC de su edificio o quien la tenga a cargo.',
+  })
+  get(@CurrentUser() user: CurrentUserData, @Param('id', ParseUUIDPipe) id: string) {
+    return this.reservations.getForViewer(user, id);
   }
 
   @Patch(':id/cancel')

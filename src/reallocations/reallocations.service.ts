@@ -157,6 +157,6 @@ export class ReallocationsService {
       throw error;
     }
 
-    return this.reservations.get(reservationId);
+    return this.reservations.getById(reservationId);
   }
 }

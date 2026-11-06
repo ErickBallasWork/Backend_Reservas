@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
   IsDateString,
   IsIn,
@@ -35,6 +36,7 @@ export class CreateReservationDto {
   purpose!: string;
 
   @ApiProperty({ description: 'Detail of the purpose', example: 'Planificación del sprint 3' })
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @IsNotEmpty()
   @MaxLength(1000)

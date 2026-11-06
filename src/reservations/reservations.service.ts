@@ -8,7 +8,12 @@ import {
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { CatalogLookupService } from '../catalog/catalog-lookup.service';
-import { RESERVATION_TYPE_BY_RESOURCE, ResourceType, Status } from '../common/constants';
+import {
+  MANAGER_ROLES,
+  RESERVATION_TYPE_BY_RESOURCE,
+  ResourceType,
+  Status,
+} from '../common/constants';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { isUniqueViolation } from '../common/db.types';
 import { toSkipTake } from '../common/pagination.dto';
@@ -17,6 +22,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SanctionsService } from '../sanctions/sanctions.service';
 import { CheckInDto, CreateReservationDto, MyReservationsQueryDto } from './dto/reservation.dto';
+import { canViewReservation } from './reservation-access.policy';
 import { insertSlots } from './slots';
 import {
   buildSlotStarts,
@@ -96,7 +102,7 @@ export class ReservationsService {
               resourceId: resource.id,
               reservationType,
               purpose: dto.purpose,
-              justification: dto.justification.trim(),
+              justification: dto.justification,
               startDateTime: start,
               endDateTime: end,
               status,
@@ -139,7 +145,7 @@ export class ReservationsService {
         },
         { timeout: 20_000 },
       );
-      return this.get(reservation.id);
+      return this.getById(reservation.id);
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new ConflictException({
@@ -169,7 +175,7 @@ export class ReservationsService {
     }
   }
 
-  async get(id: string) {
+  async getById(id: string) {
     const reservation = await this.prisma.reservation.findUnique({
       where: { id },
       include: {
@@ -188,6 +194,33 @@ export class ReservationsService {
       });
     }
     return reservation;
+  }
+
+  async getForViewer(user: CurrentUserData, id: string) {
+    const reservation = await this.getById(id);
+    const ownerIsManagedBy = await this.isManagedBy(user, reservation.userId);
+    const allowed = canViewReservation(user, {
+      userId: reservation.userId,
+      status: reservation.status,
+      resourceBuildingId: reservation.resource.building.id,
+      ownerIsManagedBy,
+    });
+    if (!allowed) {
+      throw new ForbiddenException({
+        code: 'NOT_OWNER',
+        message: 'No tienes permiso para ver esta reserva',
+      });
+    }
+    return reservation;
+  }
+
+  private async isManagedBy(user: CurrentUserData, ownerId: string) {
+    if (!user.roles.some((role) => MANAGER_ROLES.includes(role))) return false;
+    const link = await this.prisma.managedAssociate.findFirst({
+      where: { managerId: user.id, associateId: ownerId },
+      select: { id: true },
+    });
+    return link !== null;
   }
 
   async listMine(userId: string, query: MyReservationsQueryDto) {
@@ -252,7 +285,7 @@ export class ReservationsService {
         tx,
       );
     });
-    return this.get(id);
+    return this.getById(id);
   }
 
   async checkIn(user: CurrentUserData, id: string, dto: CheckInDto) {
@@ -287,6 +320,6 @@ export class ReservationsService {
         tx,
       );
     });
-    return this.get(id);
+    return this.getById(id);
   }
 }
