@@ -17,6 +17,7 @@ export interface AuthConfig {
   allowedEmailDomains: string[];
   demoLoginEnabled: boolean;
   bootstrapSuperadmin: BootstrapSuperadminConfig | null;
+  superadminTestLoginEnabled: boolean;
 }
 
 export interface BootstrapSuperadminConfig {
@@ -63,6 +64,7 @@ export function toAppConfig(env: EnvironmentVariables): AppConfig {
       deviceIdleDays: env.DEVICE_IDLE_DAYS,
       allowedEmailDomains: env.ALLOWED_EMAIL_DOMAINS,
       demoLoginEnabled: env.DEMO_LOGIN_ENABLED,
+      superadminTestLoginEnabled: env.SUPERADMIN_TEST_LOGIN_ENABLED,
       bootstrapSuperadmin: env.INITIAL_SUPERADMIN_EMAIL
         ? { email: env.INITIAL_SUPERADMIN_EMAIL, autoApprove: env.INITIAL_SUPERADMIN_AUTO_APPROVE }
         : null,

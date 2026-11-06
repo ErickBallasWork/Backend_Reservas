@@ -69,6 +69,7 @@ describe('rate limits on public endpoints', () => {
     [AuthController.prototype, 'refresh', RATE_LIMITS.refresh.limit],
     [AuthController.prototype, 'logout', RATE_LIMITS.logout.limit],
     [AuthController.prototype, 'demo', RATE_LIMITS.demoLogin.limit],
+    [AuthController.prototype, 'superadminLogin', RATE_LIMITS.superadminLogin.limit],
     [NotificationsController.prototype, 'listMine', RATE_LIMITS.notificationsPolling.limit],
     [NotificationsController.prototype, 'unreadCount', RATE_LIMITS.notificationsPolling.limit],
   ])('limits %p.%s', (prototype, method, expected) => {

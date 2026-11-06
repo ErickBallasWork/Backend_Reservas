@@ -28,6 +28,12 @@ async function bootstrap() {
   Logger.log(`API ready at http://localhost:${server.port}/api/v1`, 'Bootstrap');
   Logger.log(`Swagger at http://localhost:${server.port}/api/docs`, 'Bootstrap');
   if (auth.demoLoginEnabled) Logger.warn('Demo login is enabled (development only)', 'Bootstrap');
+  if (auth.superadminTestLoginEnabled) {
+    Logger.warn(
+      'SUPERADMIN test login is enabled: the password is the email. Turn it off after testing',
+      'Bootstrap',
+    );
+  }
 }
 
 void bootstrap();

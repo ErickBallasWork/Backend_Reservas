@@ -111,6 +111,10 @@ export class EnvironmentVariables {
   @IsBoolean()
   INITIAL_SUPERADMIN_AUTO_APPROVE = false;
 
+  @Transform(toBoolean)
+  @IsBoolean()
+  SUPERADMIN_TEST_LOGIN_ENABLED = false;
+
   @IsOptional()
   @IsString()
   @MinLength(MIN_SECRET_LENGTH)
@@ -159,6 +163,9 @@ function crossFieldErrors(env: EnvironmentVariables): string[] {
   }
   if (env.INITIAL_SUPERADMIN_AUTO_APPROVE && !env.INITIAL_SUPERADMIN_EMAIL) {
     errors.push('INITIAL_SUPERADMIN_EMAIL: is required when INITIAL_SUPERADMIN_AUTO_APPROVE=true');
+  }
+  if (env.SUPERADMIN_TEST_LOGIN_ENABLED && !env.INITIAL_SUPERADMIN_EMAIL) {
+    errors.push('INITIAL_SUPERADMIN_EMAIL: is required when SUPERADMIN_TEST_LOGIN_ENABLED=true');
   }
   const vapid = [env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY, env.VAPID_SUBJECT];
   if (vapid.some(Boolean) && !vapid.every(Boolean)) {

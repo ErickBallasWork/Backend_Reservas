@@ -7,12 +7,13 @@ import {
 } from '@nestjs/common';
 import { AccessRequestStatusQueryDto } from '../access-requests/dto/access-request.dto';
 import { AuditService } from '../audit/audit.service';
+import { SUPERADMIN_ROLE } from '../common/constants';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { generateSecret, hashSecret, matchesSecretHash } from '../common/secret-hash';
 import { AppConfigService } from '../config/app-config.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { toCurrentUser, USER_WITH_ROLES } from './current-user.mapper';
-import { RefreshDto } from './dto/auth.dto';
+import { RefreshDto, SuperadminLoginDto } from './dto/auth.dto';
 import { SessionService } from './session.service';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -76,6 +77,46 @@ export class DevicesService {
           entity: 'Device',
           entityId: created.id,
           details: { accessRequestId: request.id, label: request.deviceLabel },
+        },
+        tx,
+      );
+      return created;
+    });
+    return this.sessions.issueForDevice(toCurrentUser(user), device.id, refreshToken);
+  }
+
+  async loginSuperadminForTests(dto: SuperadminLoginDto) {
+    const { superadminTestLoginEnabled, bootstrapSuperadmin } = this.appConfig.auth;
+    if (!superadminTestLoginEnabled || !bootstrapSuperadmin) {
+      throw new NotFoundException({ code: 'NOT_FOUND', message: 'No disponible' });
+    }
+    const email = dto.email.trim().toLowerCase();
+    const credentialsMatch =
+      email === bootstrapSuperadmin.email && matchesSecretHash(dto.password, hashSecret(email));
+    if (!credentialsMatch) throw this.invalidCredentials();
+
+    const user = await this.prisma.user.findUnique({ where: { email }, include: USER_WITH_ROLES });
+    const isSuperadmin = user?.roles.some((entry) => entry.role.name === SUPERADMIN_ROLE);
+    if (!user || !user.isActive || !isSuperadmin) throw this.invalidCredentials();
+
+    const refreshToken = generateSecret();
+    const now = new Date();
+    const device = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.device.create({
+        data: {
+          userId: user.id,
+          label: 'Login de pruebas',
+          refreshTokenHash: hashSecret(refreshToken),
+          expiresAt: this.nextExpiry(now),
+        },
+      });
+      await tx.user.update({ where: { id: user.id }, data: { lastLoginAt: now } });
+      await this.audit.log(
+        {
+          userId: user.id,
+          action: 'SUPERADMIN_TEST_LOGIN',
+          entity: 'Device',
+          entityId: created.id,
         },
         tx,
       );
@@ -191,6 +232,13 @@ export class DevicesService {
     return new UnauthorizedException({
       code: 'DEVICE_NOT_AUTHORIZED',
       message: 'Este dispositivo ya no está autorizado. Pide acceso de nuevo.',
+    });
+  }
+
+  private invalidCredentials(): UnauthorizedException {
+    return new UnauthorizedException({
+      code: 'INVALID_CREDENTIALS',
+      message: 'Correo o contraseña incorrectos',
     });
   }
 

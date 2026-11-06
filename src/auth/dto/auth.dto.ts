@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsString, Length } from 'class-validator';
+import { IsEmail, IsString, Length, MaxLength } from 'class-validator';
 
 export class DemoLoginDto {
   @ApiProperty({ description: 'Email of a demo user', example: 'admin@demo.com' })
@@ -12,4 +12,16 @@ export class RefreshDto {
   @IsString()
   @Length(43, 128)
   refreshToken!: string;
+}
+
+export class SuperadminLoginDto {
+  @ApiProperty({ description: 'Initial SUPERADMIN email', example: 'admin@tcs.com' })
+  @IsEmail()
+  @MaxLength(320)
+  email!: string;
+
+  @ApiProperty({ description: 'Testing only: the password is the same email' })
+  @IsString()
+  @MaxLength(320)
+  password!: string;
 }

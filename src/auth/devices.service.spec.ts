@@ -28,7 +28,7 @@ function dbUser(isActive = true) {
   };
 }
 
-function build() {
+function build(superadminTestLoginEnabled = false) {
   const accessRequest = {
     findUnique: jest.fn(),
     updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -61,7 +61,13 @@ function build() {
     prisma as unknown as PrismaService,
     audit as unknown as AuditService,
     sessions as unknown as SessionService,
-    { auth: { deviceIdleDays: 30 } } as unknown as AppConfigService,
+    {
+      auth: {
+        deviceIdleDays: 30,
+        superadminTestLoginEnabled,
+        bootstrapSuperadmin: { email: 'admin@tcs.com', autoApprove: false },
+      },
+    } as unknown as AppConfigService,
   );
   return { service, accessRequest, user, device, audit, sessions };
 }
@@ -319,6 +325,66 @@ describe('DevicesService.revoke', () => {
 
     await expect(service.revoke(actor, 'gone')).rejects.toMatchObject({
       response: { code: 'DEVICE_NOT_FOUND' },
+    });
+  });
+});
+
+describe('DevicesService.loginSuperadminForTests', () => {
+  const EMAIL = 'admin@tcs.com';
+  const login = { email: ' Admin@TCS.com ', password: EMAIL };
+  const superadmin = {
+    ...dbUser(),
+    email: EMAIL,
+    roles: [{ buildingId: null, role: { name: 'SUPERADMIN' } }],
+  };
+
+  it('is not available when the flag is off', async () => {
+    const { service, user } = build(false);
+
+    await expect(service.loginSuperadminForTests(login)).rejects.toMatchObject({
+      response: { code: 'NOT_FOUND' },
+    });
+    expect(user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('enrolls a device and returns a session with a refresh token', async () => {
+    const { service, user, device, sessions, audit } = build(true);
+    user.findUnique.mockResolvedValue(superadmin);
+
+    const session = await service.loginSuperadminForTests(login);
+
+    expect(session).toMatchObject({ refreshToken: 'next' });
+    expect(device.create).toHaveBeenCalledTimes(1);
+    expect(sessions.issueForDevice).toHaveBeenCalledWith(
+      expect.objectContaining({ email: EMAIL }),
+      'device-id',
+      expect.any(String),
+    );
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'SUPERADMIN_TEST_LOGIN' }),
+      expect.anything(),
+    );
+  });
+
+  it.each([
+    ['a wrong password', { email: EMAIL, password: 'other' }],
+    ['another email', { email: 'ana@tcs.com', password: 'ana@tcs.com' }],
+  ])('rejects %s', async (_name, body) => {
+    const { service, user, device } = build(true);
+    user.findUnique.mockResolvedValue(superadmin);
+
+    await expect(service.loginSuperadminForTests(body)).rejects.toMatchObject({
+      response: { code: 'INVALID_CREDENTIALS' },
+    });
+    expect(device.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a user that is not an active SUPERADMIN', async () => {
+    const { service, user } = build(true);
+    user.findUnique.mockResolvedValue({ ...superadmin, roles: [] });
+
+    await expect(service.loginSuperadminForTests(login)).rejects.toMatchObject({
+      response: { code: 'INVALID_CREDENTIALS' },
     });
   });
 });
