@@ -29,6 +29,7 @@ describe('loadAppConfig', () => {
       port: 3001,
       corsOrigins: ['http://localhost:3000'],
       swaggerEnabled: true,
+      trustProxyHops: 0,
       timeZone: 'America/Guayaquil',
     });
     expect(config.auth.jwtExpiresInSeconds).toBe(15 * 60);
@@ -84,6 +85,10 @@ describe('loadAppConfig', () => {
     expect(() => loadAppConfig(baseEnv({ NOTIFY_CHANNELS: 'EMAIL,SMS' }))).toThrow(
       'NOTIFY_CHANNELS',
     );
+  });
+
+  it('rejects more proxy hops than a deployment can have', () => {
+    expect(() => loadAppConfig(baseEnv({ TRUST_PROXY_HOPS: '9' }))).toThrow('TRUST_PROXY_HOPS');
   });
 
   it('rejects an invalid time zone', () => {

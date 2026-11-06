@@ -41,6 +41,7 @@ mensaje lista cada problema.
 | `PORT`                     | no          | `3001`               | no      | Puerto HTTP                                                                                      |
 | `CORS_ORIGINS`             | sí          | —                    | no      | Orígenes del frontend separados por coma, con protocolo                                          |
 | `SWAGGER_ENABLED`          | no          | `true` fuera de prod | no      | `true` o `false`. En producción está apagado salvo que se ponga `true`                           |
+| `TRUST_PROXY_HOPS`         | no          | `0`                  | no      | Proxies delante de la API (en Azure App Service, `1`) para limitar por la IP real del cliente    |
 | `APP_TIME_ZONE`            | no          | `America/Guayaquil`  | no      | Zona IANA para los textos de los avisos                                                          |
 | `DATABASE_URL`             | sí          | —                    | **sí**  | Cadena de conexión de Prisma a SQL Server                                                        |
 | `JWT_SECRET`               | sí          | —                    | **sí**  | Mínimo 32 caracteres. `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
@@ -108,6 +109,8 @@ nueva de `prisma/migrations`. Las migraciones ya aplicadas no se editan.
 
 - Desarrollo (`DEMO_LOGIN_ENABLED=true`): `POST /auth/demo` con el correo de un usuario del seed devuelve el token. La API no arranca así en producción.
 - Acceso real (ADR-023): la persona pide acceso con su correo (`POST /access-requests`), el SUPERADMIN lo aprueba o rechaza, y el navegador aprobado canjea la solicitud una sola vez (`POST /auth/device-session`) por un access token de 15 minutos y un refresh token que rota en cada uso (`POST /auth/refresh`). Cada navegador es un dispositivo: el SUPERADMIN puede ver y revocar los de un usuario, y un dispositivo sin uso por `DEVICE_IDLE_DAYS` días vuelve a pedir acceso.
+
+- Límites de peticiones por IP: 120 por minuto en general y más estrictos en los endpoints públicos de acceso (por ejemplo, 5 solicitudes de acceso por hora). Los contadores viven en memoria de cada instancia. Detrás de App Service pon `TRUST_PROXY_HOPS=1`.
 
 ## Docker y despliegue
 

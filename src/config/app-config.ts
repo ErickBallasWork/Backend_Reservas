@@ -11,6 +11,7 @@ export interface ServerConfig {
   port: number;
   corsOrigins: string[];
   swaggerEnabled: boolean;
+  trustProxyHops: number;
   timeZone: string;
 }
 
@@ -48,6 +49,7 @@ export function toAppConfig(env: EnvironmentVariables): AppConfig {
       port: env.PORT,
       corsOrigins: env.CORS_ORIGINS,
       swaggerEnabled: env.SWAGGER_ENABLED ?? !isProduction,
+      trustProxyHops: env.TRUST_PROXY_HOPS,
       timeZone: env.APP_TIME_ZONE,
     },
     auth: {

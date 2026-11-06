@@ -1,8 +1,10 @@
 import { Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AccessRequestStatusQueryDto } from '../access-requests/dto/access-request.dto';
 import { Public } from '../common/current-user/public.decorator';
 import { ApiErrorResponses } from '../common/error-response.dto';
+import { limitFor } from '../throttling/rate-limits';
 import { AuthService } from './auth.service';
 import { DevicesService } from './devices.service';
 import { DemoLoginDto, RefreshDto } from './dto/auth.dto';
@@ -18,6 +20,7 @@ export class AuthController {
   ) {}
 
   @Public()
+  @Throttle(limitFor('deviceSession'))
   @Post('device-session')
   @HttpCode(200)
   @ApiOkResponse({ type: DeviceSessionResponseDto })
@@ -29,6 +32,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle(limitFor('refresh'))
   @Post('refresh')
   @HttpCode(200)
   @ApiOkResponse({ type: DeviceSessionResponseDto })
@@ -40,6 +44,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle(limitFor('logout'))
   @Post('logout')
   @HttpCode(204)
   @ApiNoContentResponse()
@@ -49,6 +54,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle(limitFor('demoLogin'))
   @Post('demo')
   @HttpCode(200)
   @ApiOkResponse({ type: SessionResponseDto })

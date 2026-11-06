@@ -1,10 +1,12 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiAcceptedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../common/current-user/current-user.decorator';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { Public } from '../common/current-user/public.decorator';
 import { ApiErrorResponses } from '../common/error-response.dto';
+import { limitFor } from '../throttling/rate-limits';
 import { AccessRequestsService } from './access-requests.service';
 import {
   AccessRequestStatusQueryDto,
@@ -27,6 +29,7 @@ export class AccessRequestsController {
   constructor(private readonly accessRequests: AccessRequestsService) {}
 
   @Public()
+  @Throttle(limitFor('accessRequest'))
   @Post()
   @HttpCode(202)
   @ApiAcceptedResponse({ type: AccessRequestCreatedResponseDto })
@@ -38,6 +41,7 @@ export class AccessRequestsController {
   }
 
   @Public()
+  @Throttle(limitFor('accessRequestStatus'))
   @Post('status')
   @HttpCode(200)
   @ApiOkResponse({ type: AccessRequestStatusResponseDto })

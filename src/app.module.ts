@@ -14,11 +14,13 @@ import { ReallocationsModule } from './reallocations/reallocations.module';
 import { ReportsModule } from './reports/reports.module';
 import { ReservationsModule } from './reservations/reservations.module';
 import { SanctionsModule } from './sanctions/sanctions.module';
+import { ThrottlingModule } from './throttling/throttling.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
     AppConfigModule,
+    ThrottlingModule,
     PrismaModule,
     AuditModule,
     NotificationsModule,

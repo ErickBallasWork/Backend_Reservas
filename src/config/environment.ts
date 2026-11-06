@@ -62,6 +62,12 @@ export class EnvironmentVariables {
   @IsBoolean()
   SWAGGER_ENABLED?: boolean;
 
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(5)
+  TRUST_PROXY_HOPS = 0;
+
   @IsTimeZone()
   APP_TIME_ZONE = 'America/Guayaquil';
 
