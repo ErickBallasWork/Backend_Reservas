@@ -24,7 +24,9 @@ import { OperatingHoursService } from '../operating-hours/operating-hours.servic
 import { PrismaService } from '../prisma/prisma.service';
 import { SanctionsService } from '../sanctions/sanctions.service';
 import { CheckInDto, CreateReservationDto, MyReservationsQueryDto } from './dto/reservation.dto';
+import { LeaderNotifier } from './leader-notifier';
 import { canViewReservation } from './reservation-access.policy';
+import { blockedResourceIds, describeResource } from './reservation-resources';
 import { resolveAttendees } from './attendees-rule';
 import { insertSlots } from './slots';
 import {
@@ -59,6 +61,7 @@ export class ReservationsService {
     private readonly audit: AuditService,
     private readonly reservationRules: ReservationRulesService,
     private readonly operatingHours: OperatingHoursService,
+    private readonly leaderNotifier: LeaderNotifier,
   ) {}
 
   static toHttpError(error: unknown): never {
@@ -90,10 +93,7 @@ export class ReservationsService {
       ReservationsService.toHttpError(error);
     }
     const reservationType = RESERVATION_TYPE_BY_RESOURCE[resource.type as ResourceType];
-    const blockedIds =
-      resource.type === 'AI_LAB'
-        ? [resource.id, ...(await this.lookup.activeLaptopIds(resource.id))]
-        : [resource.id];
+    const blockedIds = await blockedResourceIds(this.lookup, resource);
     const slotStarts = buildSlotStarts(start, end, rules.slotMinutes);
     try {
       await this.operatingHours.assertOpen(
@@ -104,12 +104,7 @@ export class ReservationsService {
       ReservationsService.toHttpError(error);
     }
     const status = dto.purpose === 'TRAINING' ? Status.PENDING_APPROVAL : Status.CONFIRMED;
-    const label =
-      resource.type === 'LAPTOP'
-        ? `la laptop ${resource.name} (${resource.parent?.name ?? 'laboratorio'})`
-        : resource.type === 'AI_LAB'
-          ? `${resource.name} (completo)`
-          : resource.name;
+    const label = describeResource(resource);
 
     try {
       const reservation = await this.prisma.$transaction(
@@ -147,7 +142,7 @@ export class ReservationsService {
           );
 
           if (status === Status.PENDING_APPROVAL) {
-            await this.notifyLeaders(tx, user.fullName, label);
+            await this.leaderNotifier.requestApproval(tx, user.fullName, label);
           }
 
           await this.audit.log(
@@ -173,24 +168,6 @@ export class ReservationsService {
         });
       }
       throw error;
-    }
-  }
-
-  private async notifyLeaders(tx: Prisma.TransactionClient, requester: string, label: string) {
-    const leaders = await tx.userRole.findMany({
-      where: { role: { name: 'LIDER' }, user: { isActive: true } },
-      select: { userId: true },
-    });
-    for (const userId of [...new Set<string>(leaders.map((l) => l.userId))]) {
-      await this.notifications.notify(
-        {
-          userId,
-          type: 'APPROVAL_REQUESTED',
-          title: 'Entrenamiento por aprobar',
-          message: `${requester} solicitó ${label} para un entrenamiento.`,
-        },
-        tx,
-      );
     }
   }
 
