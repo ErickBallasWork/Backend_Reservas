@@ -23,7 +23,6 @@ export class SanctionsService {
     private readonly reservationRules: ReservationRulesService,
   ) {}
 
-  /** RF-12: un asociado con sanción activa no puede reservar. */
   async assertNoActiveSanction(userId: string): Promise<void> {
     const sanction = await this.prisma.sanction.findFirst({ where: { userId, status: 'ACTIVE' } });
     if (sanction) {
@@ -35,18 +34,12 @@ export class SanctionsService {
     }
   }
 
-  /**
-   * Marca los No-Show y vence los entrenamientos que nadie aprobó a tiempo.
-   * La llama la tarea programada (POST /sanctions/no-show/run) y, como respaldo, el módulo de
-   * reservas para el usuario que intenta reservar (cálculo bajo demanda, BE-30).
-   */
   async processNoShows(filter: { userId?: string } = {}) {
     const now = new Date();
     const rules = this.reservationRules.current();
     const deadline = new Date(now.getTime() - rules.checkinAfterMin * 60_000);
     const byUser: Prisma.ReservationWhereInput = filter.userId ? { userId: filter.userId } : {};
 
-    // 1) Reservas confirmadas cuyo plazo de check-in ya pasó sin registro de uso.
     const overdue = await this.prisma.reservation.findMany({
       where: { ...byUser, status: Status.CONFIRMED, startDateTime: { lt: deadline } },
       select: { id: true, userId: true, resource: { select: { name: true } } },
@@ -57,7 +50,7 @@ export class SanctionsService {
     let noShows = 0;
     for (const reservation of overdue) {
       const marked = await this.prisma.$transaction(async (tx) => {
-        // updateMany con el estado en el filtro: si otro proceso ya la marcó, no hace nada.
+        // Filtering by status skips rows another run already marked.
         const updated = await tx.reservation.updateMany({
           where: { id: reservation.id, status: Status.CONFIRMED },
           data: { status: Status.NO_SHOW },
@@ -95,7 +88,6 @@ export class SanctionsService {
       if (marked) noShows++;
     }
 
-    // 2) Entrenamientos pendientes cuyo inicio ya pasó: se rechazan solos y se libera el horario.
     const expired = await this.prisma.reservation.findMany({
       where: { ...byUser, status: Status.PENDING_APPROVAL, startDateTime: { lte: now } },
       select: { id: true, userId: true, resource: { select: { name: true } } },
@@ -165,7 +157,6 @@ export class SanctionsService {
     return { total, page: query.page, pageSize: query.pageSize, items };
   }
 
-  /** HU-22: el Administrador regulariza la sanción; queda registrado quién y cuándo. */
   async resolve(admin: CurrentUserData, id: string, dto: ResolveSanctionDto) {
     const sanction = await this.prisma.sanction.findUnique({ where: { id } });
     if (!sanction) {

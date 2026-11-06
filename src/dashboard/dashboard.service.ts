@@ -6,7 +6,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RESERVATION_INCLUDE } from '../reservations/reservations.service';
 import { DashboardQueryDto, MetricsQueryDto } from './dto/dashboard.dto';
 
-// Filtros comunes: rango de fechas (por inicio) y edificio.
 function baseWhere(query: MetricsQueryDto): Prisma.ReservationWhereInput {
   const range =
     query.from || query.to
@@ -29,10 +28,6 @@ function countBy<T extends string>(keys: readonly T[], rows: { key: string; coun
   return result;
 }
 
-/**
- * HU-16: panel del SPOC Administrativo y del Líder de Conocimiento.
- * Pendiente: cuando se defina "asociados a su cargo", el Líder verá solo a esos usuarios.
- */
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
@@ -79,7 +74,6 @@ export class DashboardService {
       byTypeRows.map((r) => ({ key: r.reservationType, count: r._count._all })),
     );
 
-    // Inasistencia sobre las reservas que ya debían usarse (con check-in o No-Show).
     const finished = byStatus.CHECKED_IN + byStatus.NO_SHOW;
     return {
       total,

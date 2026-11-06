@@ -11,7 +11,6 @@ import { ReallocationsService } from './reallocations.service';
 export class ReallocationsController {
   constructor(private readonly reallocations: ReallocationsService) {}
 
-  // Además, el servicio revisa que la sala sea de un edificio que administra.
   @Roles('SPOC_EDIFICIO')
   @Post(':id/reallocate')
   @ApiOperation({ summary: 'Mover una reserva de sala por evento con cliente (HU-17, HU-18)' })

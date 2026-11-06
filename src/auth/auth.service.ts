@@ -22,16 +22,13 @@ export class AuthService {
     private readonly appConfig: AppConfigService,
   ) {}
 
-  /** Inicio de sesión con Google: verifica el token de Google y entrega el token propio de la API. */
   async loginWithGoogle(credential: string) {
     const profile = await this.google.verify(credential);
     const user = await this.findOrCreate(profile);
     const session = await this.issueSession(user);
-    // null = cuenta personal de Google con correo de la empresa; "tcs.com" = cuenta de Google Workspace
     return { ...session, googleWorkspaceDomain: profile.hostedDomain };
   }
 
-  /** Solo en AUTH_MODE=demo: inicia sesión como un usuario demo sin Google. */
   async loginDemo(email: string) {
     if (this.appConfig.auth.mode !== 'demo') {
       throw new NotFoundException({ code: 'NOT_FOUND', message: 'No disponible' });
@@ -49,7 +46,6 @@ export class AuthService {
     return this.issueSession(toCurrentUser(user));
   }
 
-  /** Busca al usuario por correo; si no existe y está permitido, lo crea como ASOCIADO. */
   private async findOrCreate(profile: GoogleProfile): Promise<CurrentUserData> {
     const existing = await this.prisma.user.findUnique({ where: { email: profile.email } });
 

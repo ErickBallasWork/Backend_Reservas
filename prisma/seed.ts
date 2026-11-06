@@ -1,5 +1,3 @@
-// Datos iniciales OBLIGATORIOS (también en producción): roles y Administrador inicial.
-// El catálogo (edificio, laboratorios, laptops, salas) lo registra el Administrador desde la app.
 import { PrismaClient } from '@prisma/client';
 import { ROLES } from '../src/common/constants';
 import { readSeedEnvironment } from './seed-environment';

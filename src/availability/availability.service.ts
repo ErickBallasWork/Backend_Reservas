@@ -32,11 +32,10 @@ export class AvailabilityService {
     return { from, to };
   }
 
-  /** Franjas ocupadas de cada recurso en el rango (inicio de cada franja en ISO). */
   private async busyByResource(resourceIds: string[], from: Date, to: Date) {
     const busy = new Map<string, string[]>();
     for (const id of resourceIds) busy.set(id, []);
-    // De a 500 ids para no pasar el límite de parámetros de SQL Server.
+    // Chunked to stay under the SQL Server 2100 parameter limit.
     for (const ids of chunk(resourceIds, 500)) {
       const slots = await this.prisma.reservationSlot.findMany({
         where: { resourceId: { in: ids }, slotStart: { gte: from, lt: to } },
@@ -48,11 +47,6 @@ export class AvailabilityService {
     return busy;
   }
 
-  /**
-   * HU-06: detalle de un recurso. Devuelve sus franjas ocupadas y, si es laboratorio, las de cada
-   * laptop. Si el laboratorio tiene una franja ocupada, está reservado completo y sus laptops se
-   * muestran bloqueadas en esa franja.
-   */
   async resource(resourceId: string, query: RangeQueryDto) {
     const { from, to } = this.parseRange(query);
     const resource = await this.prisma.resource.findUnique({
@@ -86,7 +80,6 @@ export class AvailabilityService {
     };
   }
 
-  /** HU-06: salas y laboratorios libres en todo el rango (filtros: edificio, tipo, capacidad). */
   async search(query: SearchAvailabilityQueryDto) {
     const { from, to } = this.parseRange(query);
     const where: Prisma.ResourceWhereInput = {
@@ -120,7 +113,6 @@ export class AvailabilityService {
         capacity: r.capacity,
         equipment: r.equipment,
         building: r.building,
-        // Sala: libre si nadie la reservó. Laboratorio: libre completo si él y todas sus laptops lo están.
         free:
           r.type === 'AI_LAB' ? isFree(r.id) && freeLaptops === r.children.length : isFree(r.id),
         ...(r.type === 'AI_LAB' ? { totalLaptops: r.children.length, freeLaptops } : {}),

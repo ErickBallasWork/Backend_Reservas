@@ -45,7 +45,6 @@ export class UsersService {
     }));
   }
 
-  /** Convierte la lista de roles pedida en filas de USER_ROLE (valida rol y edificio). */
   private async toRoleRows(roles: RoleAssignmentDto[]) {
     const all = await this.prisma.role.findMany();
     const idByName = new Map<string, number>(all.map((r) => [r.name, r.id]));
@@ -80,7 +79,6 @@ export class UsersService {
     return rows;
   }
 
-  /** El Administrador da de alta a un usuario antes de que entre (útil con AUTO_CREATE_USERS=false). */
   async create(admin: CurrentUserData, dto: CreateUserDto) {
     const roles: RoleAssignmentDto[] = dto.roles ?? [{ role: 'ASOCIADO' }];
     const rows = await this.toRoleRows(roles);
@@ -108,7 +106,6 @@ export class UsersService {
     return this.get(user.id);
   }
 
-  /** Activar o desactivar, cambiar departamento y asignar roles (HU de asignación de roles). */
   async update(admin: CurrentUserData, id: string, dto: UpdateUserDto) {
     const before = await this.get(id);
     const rows = dto.roles ? await this.toRoleRows(dto.roles) : null;

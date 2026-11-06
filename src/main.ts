@@ -12,7 +12,7 @@ async function bootstrap() {
   const demoMode = auth.mode === 'demo';
 
   app.setGlobalPrefix('api/v1');
-  // CSP is disabled outside production so the Swagger UI assets load.
+  // CSP is disabled outside production so the Swagger UI loads.
   app.use(helmet({ contentSecurityPolicy: server.isProduction ? undefined : false }));
   app.enableCors({ origin: server.corsOrigins });
   app.useGlobalPipes(

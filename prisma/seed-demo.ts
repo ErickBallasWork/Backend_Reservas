@@ -1,6 +1,3 @@
-// Datos de ejemplo para desarrollo y demo. Se puede correr varias veces sin duplicar nada:
-//   npm run db:seed
-// No borra reservas ni datos creados por ti: solo crea lo que falte y rehace los roles de los usuarios demo.
 import { PrismaClient } from '@prisma/client';
 import { ROLES } from '../src/common/constants';
 import { readSeedEnvironment } from './seed-environment';
@@ -28,7 +25,6 @@ async function upsertResource(data: {
 }
 
 async function main() {
-  // ---- Roles (tabla ROLE) ----
   for (const name of ROLES) {
     await prisma.role.upsert({ where: { name }, update: {}, create: { name } });
   }
@@ -36,7 +32,6 @@ async function main() {
     (await prisma.role.findMany()).map((r) => [r.name, r.id]),
   );
 
-  // ---- Edificios ----
   const quito = await prisma.building.upsert({
     where: { name: 'Edificio Quito Norte' },
     update: {},
@@ -48,7 +43,6 @@ async function main() {
     create: { name: 'Edificio Guayaquil Centro', address: 'Av. 9 de Octubre, Guayaquil' },
   });
 
-  // ---- Salas de reuniones ----
   await upsertResource({
     buildingId: quito.id,
     type: 'MEETING_ROOM',
@@ -78,7 +72,6 @@ async function main() {
     equipment: 'Proyector',
   });
 
-  // ---- Laboratorio de IA con 5 laptops (las laptops son recursos hijos del laboratorio) ----
   const lab = await upsertResource({
     buildingId: quito.id,
     type: 'AI_LAB',
@@ -99,7 +92,6 @@ async function main() {
     });
   }
 
-  // ---- Usuarios demo, uno por rol ----
   const users = [
     {
       email: 'ana.asociado@demo.com',
@@ -134,13 +126,11 @@ async function main() {
       update: { fullName: u.fullName, department: u.department },
       create: { email: u.email, fullName: u.fullName, department: u.department },
     });
-    // Se rehacen los roles para que siempre queden como en esta lista.
     await prisma.userRole.deleteMany({ where: { userId: user.id } });
     await prisma.userRole.createMany({
       data: u.roles.map((role) => ({
         userId: user.id,
         roleId: roleIds.get(role)!,
-        // Carlos es SPOC del edificio de Quito
         buildingId: role === 'SPOC_EDIFICIO' ? quito.id : null,
       })),
     });

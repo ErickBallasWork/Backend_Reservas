@@ -10,16 +10,9 @@ import { AppConfigService } from '../config/app-config.service';
 export interface GoogleProfile {
   email: string;
   name: string;
-  /** Dominio de Google Workspace, si la cuenta es corporativa */
   hostedDomain: string | null;
 }
 
-/**
- * Verifica el "credential" (ID token) que entrega el botón de Google en el frontend.
- * Google firma ese token; aquí se comprueba la firma, que sea para nuestra app (Client ID),
- * que no haya expirado, que el correo esté verificado y que sea de un dominio permitido.
- * Solo se usa el servicio de identidad de Google: nada queda alojado en Google Cloud.
- */
 @Injectable()
 export class GoogleVerifierService {
   private readonly client = new OAuth2Client();

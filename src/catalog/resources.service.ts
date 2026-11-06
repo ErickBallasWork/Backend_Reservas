@@ -11,7 +11,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CatalogLookupService } from './catalog-lookup.service';
 import { CreateResourceDto, ListResourcesQueryDto, UpdateResourceDto } from './dto/resource.dto';
 
-/** Salas, laboratorios de IA y laptops (RF-01, RF-02). */
 @Injectable()
 export class ResourcesService {
   constructor(
@@ -56,7 +55,6 @@ export class ResourcesService {
     return resource;
   }
 
-  /** Devuelve el laboratorio si existe y es de tipo AI_LAB. */
   private async getLab(labId: string) {
     const lab = await this.prisma.resource.findUnique({ where: { id: labId } });
     if (!lab) {
@@ -142,7 +140,6 @@ export class ResourcesService {
     const before = await this.get(id);
     const data: Prisma.ResourceUncheckedUpdateInput = {};
 
-    // Mover una laptop a otro laboratorio
     if (dto.parentResourceId !== undefined && dto.parentResourceId !== before.parentResourceId) {
       if (before.type !== 'LAPTOP') {
         throw new BadRequestException({
@@ -156,7 +153,6 @@ export class ResourcesService {
       data.buildingId = lab.buildingId;
     }
 
-    // Inactivar: no puede tener reservas futuras (si es laboratorio, tampoco sus laptops)
     if (dto.isActive === false && before.isActive) {
       const where: Prisma.ReservationWhereInput =
         before.type === 'AI_LAB'
@@ -191,7 +187,6 @@ export class ResourcesService {
     return after;
   }
 
-  /** Reservas futuras que se verían afectadas al inactivar (HU-05). */
   async futureReservations(id: string) {
     const resource = await this.get(id);
     const where: Prisma.ReservationWhereInput =

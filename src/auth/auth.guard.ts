@@ -16,12 +16,6 @@ import { JwtPayload } from './auth.service';
 import { toCurrentUser, USER_WITH_ROLES } from './current-user.mapper';
 import { ROLES_KEY } from './roles.decorator';
 
-/**
- * Guard global: corre antes de cada ruta.
- * 1) ¿Quién eres? Valida el token de la API (cabecera Authorization: Bearer ...).
- *    En AUTH_MODE=demo también acepta la cabecera x-demo-user (solo desarrollo).
- * 2) ¿Puedes? Si la ruta tiene @Roles(...), revisa que el usuario tenga uno de esos roles (ADMIN siempre pasa).
- */
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(

@@ -26,7 +26,6 @@ import {
   validateReservationTimes,
 } from './time-rules';
 
-// Datos que se devuelven junto con cada reserva.
 export const RESERVATION_INCLUDE = {
   resource: {
     select: {
@@ -52,7 +51,6 @@ export class ReservationsService {
     private readonly reservationRules: ReservationRulesService,
   ) {}
 
-  /** Convierte una regla incumplida en un error 422 con su código. */
   static toHttpError(error: unknown): never {
     if (error instanceof RuleViolation) {
       throw new UnprocessableEntityException({ code: error.code, message: error.message });
@@ -60,15 +58,12 @@ export class ReservationsService {
     throw error;
   }
 
-  /** RF-03 a RF-08: reservar una sala, un laboratorio completo o una laptop. */
   async create(user: CurrentUserData, dto: CreateReservationDto) {
     const rules = this.reservationRules.current();
 
-    // 1) Sanciones. Antes se calculan los No-Show pendientes de este usuario (respaldo de la tarea).
     await this.sanctions.processNoShows({ userId: user.id });
     await this.sanctions.assertNoActiveSanction(user.id);
 
-    // 2) Reglas de tiempo: franjas, anticipación y duración máxima (RF-05, RF-06).
     const start = new Date(dto.startDateTime);
     const end = new Date(dto.endDateTime);
     try {
@@ -77,11 +72,8 @@ export class ReservationsService {
       ReservationsService.toHttpError(error);
     }
 
-    // 3) Qué recurso se reserva y qué recursos quedan bloqueados (RF-03).
     const resource = await this.lookup.getActiveResource(dto.resourceId);
     const reservationType = RESERVATION_TYPE_BY_RESOURCE[resource.type as ResourceType];
-    // El laboratorio completo bloquea también cada una de sus laptops; y una laptop tomada
-    // impide reservar el laboratorio completo en ese horario (choca en la franja de la laptop).
     const blockedIds =
       resource.type === 'AI_LAB'
         ? [resource.id, ...(await this.lookup.activeLaptopIds(resource.id))]
@@ -95,7 +87,6 @@ export class ReservationsService {
           ? `${resource.name} (completo)`
           : resource.name;
 
-    // 4) Todo en una transacción: reserva + franjas + avisos + auditoría.
     try {
       const reservation = await this.prisma.$transaction(
         async (tx) => {
@@ -160,7 +151,6 @@ export class ReservationsService {
     }
   }
 
-  // Pendiente: cuando se defina "asociados a cargo", avisar solo al Líder del asociado.
   private async notifyLeaders(tx: Prisma.TransactionClient, requester: string, label: string) {
     const leaders = await tx.userRole.findMany({
       where: { role: { name: 'LIDER' }, user: { isActive: true } },
@@ -239,7 +229,6 @@ export class ReservationsService {
     return reservation;
   }
 
-  /** RF-05: cancelar con la anticipación mínima. Libera las franjas de inmediato. */
   async cancel(user: CurrentUserData, id: string) {
     const reservation = await this.getOwned(user.id, id);
     if (reservation.status !== Status.CONFIRMED && reservation.status !== Status.PENDING_APPROVAL) {
@@ -266,7 +255,6 @@ export class ReservationsService {
     return this.get(id);
   }
 
-  /** RF-12 / HU-20: registrar el uso del espacio dentro de la ventana de check-in. */
   async checkIn(user: CurrentUserData, id: string, dto: CheckInDto) {
     const reservation = await this.getOwned(user.id, id);
     if (reservation.status !== Status.CONFIRMED) {

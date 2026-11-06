@@ -25,7 +25,7 @@ export interface DepartmentUsageRow {
 
 const HOUR = 3_600_000;
 
-// Excel abre bien las tildes si el CSV empieza con este carácter invisible (BOM).
+// The BOM makes Excel read accented characters correctly.
 const BOM = String.fromCharCode(0xfeff);
 
 function toCsv(header: string[], rows: (string | number)[][]): string {
@@ -39,12 +39,6 @@ function rate(reserved: number, available: number): number {
   return available > 0 ? Number((reserved / available).toFixed(4)) : 0;
 }
 
-/**
- * HU-23: reportes del Administrador.
- * La ocupación se calcula contando franjas guardadas (RESERVATION_SLOT): una consulta agregada rápida.
- * Nota: hoy se toma el día completo como horario disponible; cuando se defina el horario
- * operativo, se ajusta availableHours.
- */
 @Injectable()
 export class ReportsService {
   constructor(
@@ -76,8 +70,6 @@ export class ReportsService {
     const slotHours = this.reservationRules.current().slotMinutes / 60;
     const availableHours = (to.getTime() - from.getTime()) / HOUR;
 
-    // Franjas reservadas por recurso. Solo cuentan reservas vivas (las canceladas y
-    // rechazadas ya no tienen franjas; las de No-Show sí, porque bloquearon el recurso).
     const grouped = await this.prisma.reservationSlot.groupBy({
       by: ['resourceId'],
       where: { slotStart: { gte: from, lt: to } },
@@ -86,7 +78,6 @@ export class ReportsService {
     const slotsById = new Map<string, number>(grouped.map((g) => [g.resourceId, g._count._all]));
     const reservedHoursOf = (id: string) => (slotsById.get(id) ?? 0) * slotHours;
 
-    // Una laptop cuenta como ocupada tanto si la reservaron sola como si reservaron el laboratorio completo.
     const types = groupBy === 'laptop' ? ['LAPTOP'] : ['MEETING_ROOM', 'AI_LAB'];
     const resources = await this.prisma.resource.findMany({
       where: { type: { in: types } },
@@ -108,7 +99,6 @@ export class ReportsService {
     });
     if (groupBy !== 'building') return rows;
 
-    // Por edificio: suma de horas de sus salas y laboratorios (sin laptops, para no contar doble).
     const byBuilding = new Map<string, OccupancyRow>();
     resources.forEach((r, i) => {
       const current = byBuilding.get(r.buildingId) ?? {
@@ -128,7 +118,6 @@ export class ReportsService {
     return [...byBuilding.values()];
   }
 
-  /** Misma consulta en CSV para descargar y abrir en Excel. */
   async occupancyCsv(query: OccupancyQueryDto): Promise<string> {
     const rows = await this.occupancy(query);
     return toCsv(
@@ -153,7 +142,6 @@ export class ReportsService {
     );
   }
 
-  /** Uso por área (USERS.Department): reservas, asistencias, No-Show y cancelaciones. */
   async usageByDepartment(query: DateRangeQueryDto): Promise<DepartmentUsageRow[]> {
     const { from, to } = this.parseRange(query);
     const grouped = await this.prisma.reservation.groupBy({
@@ -164,7 +152,7 @@ export class ReportsService {
 
     const userIds = [...new Set(grouped.map((g) => g.userId))];
     const departmentOf = new Map<string, string>();
-    // SQL Server acepta hasta 2100 parámetros por consulta: se buscan los usuarios por bloques.
+    // Chunked to stay under the SQL Server 2100 parameter limit.
     for (const ids of chunk(userIds, 1000)) {
       const users = await this.prisma.user.findMany({
         where: { id: { in: ids } },

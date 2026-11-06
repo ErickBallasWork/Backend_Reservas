@@ -22,7 +22,6 @@ export class ApprovalsService {
     private readonly audit: AuditService,
   ) {}
 
-  /** Entrenamientos esperando decisión. Pendiente: filtrar por "asociados a cargo" del Líder. */
   listPending() {
     return this.prisma.reservation.findMany({
       where: { status: Status.PENDING_APPROVAL, startDateTime: { gt: new Date() } },
@@ -31,7 +30,6 @@ export class ApprovalsService {
     });
   }
 
-  /** HU-15: aprobar o rechazar (el rechazo exige comentario y libera el horario). */
   async decide(approver: CurrentUserData, reservationId: string, dto: DecideApprovalDto) {
     const reservation = await this.prisma.reservation.findUnique({
       where: { id: reservationId },
@@ -65,7 +63,7 @@ export class ApprovalsService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      // updateMany con el estado en el filtro evita que dos líderes decidan a la vez.
+      // Filtering by status lets only one concurrent decision win.
       const updated = await tx.reservation.updateMany({
         where: { id: reservationId, status: Status.PENDING_APPROVAL },
         data: { status: approve ? Status.CONFIRMED : Status.REJECTED },

@@ -2,7 +2,6 @@ import { Global, Module } from '@nestjs/common';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 
-// Global: cualquier servicio puede crear avisos.
 @Global()
 @Module({
   controllers: [NotificationsController],

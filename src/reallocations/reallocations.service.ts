@@ -33,11 +33,6 @@ export class ReallocationsService {
     private readonly appConfig: AppConfigService,
   ) {}
 
-  /**
-   * HU-17 y HU-18: el SPOC de Edificio mueve una reserva de sala (a otra sala y/o a otro horario)
-   * por un evento con cliente. Valida choques con las mismas franjas y avisa al asociado.
-   * Solo el SPOC del edificio de la sala (o un ADMIN) puede hacerlo.
-   */
   async reallocate(spoc: CurrentUserData, reservationId: string, dto: ReallocateReservationDto) {
     const reservation = await this.prisma.reservation.findUnique({
       where: { id: reservationId },
@@ -72,7 +67,6 @@ export class ReallocationsService {
       'MEETING_ROOM',
     ]);
 
-    // El SPOC solo maneja las salas de sus edificios (la de origen y la de destino).
     if (!spoc.roles.includes('ADMIN')) {
       const ownsOrigin = spoc.spocBuildingIds.includes(reservation.resource.buildingId);
       const ownsTarget = spoc.spocBuildingIds.includes(room.buildingId);
@@ -88,7 +82,6 @@ export class ReallocationsService {
     const end = dto.newEndDateTime ? new Date(dto.newEndDateTime) : reservation.endDateTime;
     const rules = this.reservationRules.current();
     try {
-      // El SPOC no está sujeto a la anticipación mínima, pero sí a franjas, futuro y duración máxima.
       validateReservationTimes(start, end, new Date(), { ...rules, minAdvanceHours: 0 });
     } catch (error) {
       ReservationsService.toHttpError(error);

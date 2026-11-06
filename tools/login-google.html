@@ -4,7 +4,6 @@
     <meta charset="utf-8" />
     <title>Prueba de inicio de sesión con Google</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <!-- Google lo pide al probar con http://localhost -->
     <meta name="referrer" content="no-referrer-when-downgrade" />
     <style>
       body {
@@ -53,8 +52,6 @@
     <button id="copiar" hidden>Copiar accessToken</button>
 
     <script>
-      // Dirección de la API: en tu PC es localhost:3001; en un Codespace se arma sola
-      // cambiando el puerto 3000 de esta página por el 3001 de la API.
       const API =
         location.hostname === 'localhost'
           ? 'http://localhost:3001/api/v1'
@@ -69,13 +66,12 @@
           'No se pudo llamar a la API (' +
           API +
           ').\n' +
-          'Revisa que esté corriendo y que FRONTEND_URL del .env sea ' +
+          'Revisa que esté corriendo y que CORS_ORIGINS del .env incluya ' +
           location.origin +
           '.\n' +
           'Detalle en la consola del navegador (F12).';
       }
 
-      // 1) Pide a la API el Client ID y muestra el botón de Google.
       async function iniciar() {
         let config;
         try {
@@ -102,7 +98,6 @@
         salida.textContent = 'Aún no has iniciado sesión. Modo del backend: ' + config.authMode;
       }
 
-      // 2) El botón entrega un "credential" (token de Google): se lo mandamos al backend.
       async function alIniciarSesion(respuesta) {
         salida.textContent = 'Validando con el backend...';
         let r;
@@ -122,7 +117,6 @@
           return;
         }
         token = datos.accessToken;
-        // 3) Con el token de la API ya se puede llamar cualquier ruta protegida.
         const me = await fetch(API + '/me', { headers: { Authorization: 'Bearer ' + token } });
         const tipoCuenta = datos.googleWorkspaceDomain
           ? 'Cuenta de Google Workspace (' + datos.googleWorkspaceDomain + ')'

@@ -6,7 +6,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   private readonly logger = new Logger(PrismaService.name);
 
   async onModuleInit() {
-    // La base gratuita de Azure SQL se pausa sola: la primera conexión puede fallar mientras despierta.
+    // Serverless Azure SQL may be paused and reject the first connect.
     const attempts = 4;
     for (let i = 1; i <= attempts; i++) {
       try {

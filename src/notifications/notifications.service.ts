@@ -13,7 +13,6 @@ export interface NotifyInput {
   message: string;
 }
 
-// Un canal extra (push o e-mail). Hoy solo escriben en la consola (simulado) para desarrollo.
 interface ChannelSender {
   send(input: { email: string; title: string; message: string }): Promise<void>;
 }
@@ -22,7 +21,6 @@ interface ChannelSender {
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
-  // Cuando se aprueben push o e-mail, se reemplaza el sender de ese canal y nada más cambia.
   private readonly senders: Record<string, ChannelSender> = {
     EMAIL: {
       send: async ({ email, title }) => {
@@ -41,10 +39,6 @@ export class NotificationsService {
     private readonly appConfig: AppConfigService,
   ) {}
 
-  /**
-   * Crea el aviso en la bandeja del sistema (canal IN_APP, entregado al instante) y, por cada canal
-   * extra activo, un envío pendiente. Pasa "db" para guardarlo en la misma transacción que el cambio.
-   */
   async notify(input: NotifyInput, db?: Db): Promise<void> {
     const client = db ?? this.prisma;
     const now = new Date();
@@ -107,7 +101,6 @@ export class NotificationsService {
     return { updated: result.count };
   }
 
-  /** Procesa los envíos pendientes por push o e-mail (lo llamaría una tarea programada). */
   async processPending(limit = 50) {
     const pending = await this.prisma.notification.findMany({
       where: { channel: { not: 'IN_APP' }, status: 'PENDING', attempts: { lt: 3 } },
