@@ -29,7 +29,10 @@ export class BuildingsService {
       },
     });
     if (!building) {
-      throw new NotFoundException({ code: 'BUILDING_NOT_FOUND', message: `No existe el edificio ${id}` });
+      throw new NotFoundException({
+        code: 'BUILDING_NOT_FOUND',
+        message: `No existe el edificio ${id}`,
+      });
     }
     return building;
   }

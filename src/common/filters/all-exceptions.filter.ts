@@ -72,7 +72,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
     } else if (exception instanceof Prisma.PrismaClientInitializationError) {
       status = HttpStatus.SERVICE_UNAVAILABLE;
       code = 'DATABASE_UNAVAILABLE';
-      message = 'La base de datos no está disponible (puede estar despertando). Intenta en un minuto.';
+      message =
+        'La base de datos no está disponible (puede estar despertando). Intenta en un minuto.';
       this.logger.error(exception.message);
     } else {
       this.logger.error(exception instanceof Error ? exception.stack : String(exception));

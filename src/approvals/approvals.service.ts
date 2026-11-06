@@ -71,7 +71,10 @@ export class ApprovalsService {
         data: { status: approve ? Status.CONFIRMED : Status.REJECTED },
       });
       if (updated.count === 0) {
-        throw new ConflictException({ code: 'NOT_PENDING', message: 'Otra persona ya decidió esta reserva' });
+        throw new ConflictException({
+          code: 'NOT_PENDING',
+          message: 'Otra persona ya decidió esta reserva',
+        });
       }
       await tx.approval.create({
         data: {

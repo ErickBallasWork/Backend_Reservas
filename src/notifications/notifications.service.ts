@@ -69,7 +69,11 @@ export class NotificationsService {
       ...(query.unreadOnly ? { isRead: false } : {}),
     };
     const [items, total, unread] = await Promise.all([
-      this.prisma.notification.findMany({ where, orderBy: { createdAt: 'desc' }, ...toSkipTake(query) }),
+      this.prisma.notification.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        ...toSkipTake(query),
+      }),
       this.prisma.notification.count({ where }),
       this.prisma.notification.count({ where: { userId, channel: 'IN_APP', isRead: false } }),
     ]);
@@ -88,7 +92,10 @@ export class NotificationsService {
       where: { id, userId, channel: 'IN_APP' },
     });
     if (!notification) {
-      throw new NotFoundException({ code: 'NOTIFICATION_NOT_FOUND', message: 'El aviso no existe' });
+      throw new NotFoundException({
+        code: 'NOTIFICATION_NOT_FOUND',
+        message: 'El aviso no existe',
+      });
     }
     if (notification.isRead) return notification;
     return this.prisma.notification.update({ where: { id }, data: { isRead: true } });

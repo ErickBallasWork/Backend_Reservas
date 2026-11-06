@@ -29,7 +29,10 @@ export class CatalogLookupService {
       include: { building: true, parent: true },
     });
     if (!resource) {
-      throw new NotFoundException({ code: 'RESOURCE_NOT_FOUND', message: `No existe el recurso ${id}` });
+      throw new NotFoundException({
+        code: 'RESOURCE_NOT_FOUND',
+        message: `No existe el recurso ${id}`,
+      });
     }
     if (expected && !(expected as string[]).includes(resource.type)) {
       throw new UnprocessableEntityException({

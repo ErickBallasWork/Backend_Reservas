@@ -40,28 +40,28 @@ la carpeta nueva de `prisma/migrations`.
 
 ## Usuarios demo (AUTH_MODE=demo)
 
-| Correo | Roles |
-| --- | --- |
-| ana.asociado@demo.com | ASOCIADO |
-| luis.lider@demo.com | ASOCIADO, LIDER |
-| sofia.spocadmin@demo.com | ASOCIADO, SPOC_ADMIN |
-| carlos.spoc@demo.com | ASOCIADO, SPOC_EDIFICIO (Edificio Quito Norte) |
-| admin@demo.com | ADMIN |
+| Correo                   | Roles                                          |
+| ------------------------ | ---------------------------------------------- |
+| ana.asociado@demo.com    | ASOCIADO                                       |
+| luis.lider@demo.com      | ASOCIADO, LIDER                                |
+| sofia.spocadmin@demo.com | ASOCIADO, SPOC_ADMIN                           |
+| carlos.spoc@demo.com     | ASOCIADO, SPOC_EDIFICIO (Edificio Quito Norte) |
+| admin@demo.com           | ADMIN                                          |
 
 ## Comandos
 
-| Comando | Para qué |
-| --- | --- |
-| `npm run start:dev` | Levanta la API y se reinicia al guardar |
-| `npm test` | Pruebas unitarias de reglas de tiempo y franjas |
-| `npm run build` | Compila a `dist/` |
-| `npm run db:up` / `db:down` | Enciende / apaga SQL Server en Docker |
-| `npm run db:logs` | Ver qué está haciendo SQL Server |
-| `npm run db:migrate` | Crea o actualiza tablas según `schema.prisma` (solo base local) |
-| `npm run db:seed` | Datos de ejemplo (se puede repetir) |
-| `npm run db:studio` | Ver y editar datos en el navegador |
-| `npm run db:reset` | **Solo local**: borra todo, recrea tablas y corre el seed |
-| `npm run db:deploy` | Aplica migraciones ya creadas (lo que se usa en Azure) |
+| Comando                     | Para qué                                                        |
+| --------------------------- | --------------------------------------------------------------- |
+| `npm run start:dev`         | Levanta la API y se reinicia al guardar                         |
+| `npm test`                  | Pruebas unitarias de reglas de tiempo y franjas                 |
+| `npm run build`             | Compila a `dist/`                                               |
+| `npm run db:up` / `db:down` | Enciende / apaga SQL Server en Docker                           |
+| `npm run db:logs`           | Ver qué está haciendo SQL Server                                |
+| `npm run db:migrate`        | Crea o actualiza tablas según `schema.prisma` (solo base local) |
+| `npm run db:seed`           | Datos de ejemplo (se puede repetir)                             |
+| `npm run db:studio`         | Ver y editar datos en el navegador                              |
+| `npm run db:reset`          | **Solo local**: borra todo, recrea tablas y corre el seed       |
+| `npm run db:deploy`         | Aplica migraciones ya creadas (lo que se usa en Azure)          |
 
 ## Inicio de sesión
 

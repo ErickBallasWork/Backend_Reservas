@@ -15,7 +15,10 @@ export class AvailabilityService {
     const from = new Date(query.from);
     const to = new Date(query.to);
     if (to.getTime() <= from.getTime()) {
-      throw new BadRequestException({ code: 'INVALID_RANGE', message: '"to" debe ser posterior a "from"' });
+      throw new BadRequestException({
+        code: 'INVALID_RANGE',
+        message: '"to" debe ser posterior a "from"',
+      });
     }
     if (to.getTime() - from.getTime() > MAX_RANGE_DAYS * 24 * 3_600_000) {
       throw new BadRequestException({
@@ -54,9 +57,16 @@ export class AvailabilityService {
       include: { children: { where: { isActive: true }, orderBy: { name: 'asc' } } },
     });
     if (!resource) {
-      throw new NotFoundException({ code: 'RESOURCE_NOT_FOUND', message: `No existe el recurso ${resourceId}` });
+      throw new NotFoundException({
+        code: 'RESOURCE_NOT_FOUND',
+        message: `No existe el recurso ${resourceId}`,
+      });
     }
-    const busy = await this.busyByResource([resource.id, ...resource.children.map((c) => c.id)], from, to);
+    const busy = await this.busyByResource(
+      [resource.id, ...resource.children.map((c) => c.id)],
+      from,
+      to,
+    );
     return {
       resourceId: resource.id,
       name: resource.name,
@@ -94,7 +104,8 @@ export class AvailabilityService {
     });
 
     const ids = resources.flatMap((r) => [r.id, ...r.children.map((c) => c.id)]);
-    const busy = ids.length > 0 ? await this.busyByResource(ids, from, to) : new Map<string, string[]>();
+    const busy =
+      ids.length > 0 ? await this.busyByResource(ids, from, to) : new Map<string, string[]>();
     const isFree = (id: string) => (busy.get(id) ?? []).length === 0;
 
     return resources.map((r) => {
@@ -107,7 +118,8 @@ export class AvailabilityService {
         equipment: r.equipment,
         building: r.building,
         // Sala: libre si nadie la reservó. Laboratorio: libre completo si él y todas sus laptops lo están.
-        free: r.type === 'AI_LAB' ? isFree(r.id) && freeLaptops === r.children.length : isFree(r.id),
+        free:
+          r.type === 'AI_LAB' ? isFree(r.id) && freeLaptops === r.children.length : isFree(r.id),
         ...(r.type === 'AI_LAB' ? { totalLaptops: r.children.length, freeLaptops } : {}),
       };
     });

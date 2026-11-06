@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import {
+  IsDateString,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 import { CHECK_IN_METHODS, PURPOSES, RESERVATION_STATUSES } from '../../common/constants';
 import { PaginationQueryDto } from '../../common/pagination.dto';
 

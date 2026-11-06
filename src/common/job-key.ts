@@ -9,6 +9,9 @@ export function assertJobKey(provided: string | undefined): void {
   const expected = process.env.JOB_KEY;
   if (!expected) return;
   if (provided !== expected) {
-    throw new UnauthorizedException({ code: 'INVALID_JOB_KEY', message: 'Clave de tarea inválida' });
+    throw new UnauthorizedException({
+      code: 'INVALID_JOB_KEY',
+      message: 'Clave de tarea inválida',
+    });
   }
 }

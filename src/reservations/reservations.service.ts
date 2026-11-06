@@ -118,7 +118,9 @@ export class ReservationsService {
               userId: user.id,
               type: status === Status.CONFIRMED ? 'RESERVATION_CONFIRMED' : 'RESERVATION_PENDING',
               title:
-                status === Status.CONFIRMED ? 'Reserva confirmada' : 'Reserva pendiente de aprobación',
+                status === Status.CONFIRMED
+                  ? 'Reserva confirmada'
+                  : 'Reserva pendiente de aprobación',
               message:
                 status === Status.CONFIRMED
                   ? `Tu reserva de ${label} quedó confirmada.`
@@ -189,7 +191,10 @@ export class ReservationsService {
       },
     });
     if (!reservation) {
-      throw new NotFoundException({ code: 'RESERVATION_NOT_FOUND', message: `No existe la reserva ${id}` });
+      throw new NotFoundException({
+        code: 'RESERVATION_NOT_FOUND',
+        message: `No existe la reserva ${id}`,
+      });
     }
     return reservation;
   }
@@ -222,7 +227,10 @@ export class ReservationsService {
   private async getOwned(userId: string, id: string) {
     const reservation = await this.prisma.reservation.findUnique({ where: { id } });
     if (!reservation) {
-      throw new NotFoundException({ code: 'RESERVATION_NOT_FOUND', message: `No existe la reserva ${id}` });
+      throw new NotFoundException({
+        code: 'RESERVATION_NOT_FOUND',
+        message: `No existe la reserva ${id}`,
+      });
     }
     if (reservation.userId !== userId) {
       throw new ForbiddenException({ code: 'NOT_OWNER', message: 'Esta reserva no es tuya' });

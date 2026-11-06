@@ -36,7 +36,11 @@ export const Status = {
 } as const;
 
 // Estados que ocupan horario (tienen franjas guardadas)
-export const BLOCKING_STATUSES: string[] = [Status.PENDING_APPROVAL, Status.CONFIRMED, Status.CHECKED_IN];
+export const BLOCKING_STATUSES: string[] = [
+  Status.PENDING_APPROVAL,
+  Status.CONFIRMED,
+  Status.CHECKED_IN,
+];
 
 export const SANCTION_STATUSES = ['ACTIVE', 'RESOLVED'] as const;
 

@@ -15,7 +15,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         return;
       } catch (error) {
         if (i === attempts) throw error;
-        this.logger.warn(`La base no respondió (intento ${i}/${attempts}). Reintentando en 15 s...`);
+        this.logger.warn(
+          `La base no respondió (intento ${i}/${attempts}). Reintentando en 15 s...`,
+        );
         await new Promise((resolve) => setTimeout(resolve, 15000));
       }
     }

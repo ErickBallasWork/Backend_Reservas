@@ -22,7 +22,7 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/erickballaswork/backend_reservas:latest
-      
+
       - uses: azure/webapps-deploy@v3
         with:
           app-name: reservas-backend

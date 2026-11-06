@@ -32,7 +32,9 @@ async function main() {
   for (const name of ROLES) {
     await prisma.role.upsert({ where: { name }, update: {}, create: { name } });
   }
-  const roleIds = new Map<string, number>((await prisma.role.findMany()).map((r) => [r.name, r.id]));
+  const roleIds = new Map<string, number>(
+    (await prisma.role.findMany()).map((r) => [r.name, r.id]),
+  );
 
   // ---- Edificios ----
   const quito = await prisma.building.upsert({
@@ -47,10 +49,34 @@ async function main() {
   });
 
   // ---- Salas de reuniones ----
-  await upsertResource({ buildingId: quito.id, type: 'MEETING_ROOM', name: 'Sala Pichincha', capacity: 8, equipment: 'Pantalla, pizarra' });
-  await upsertResource({ buildingId: quito.id, type: 'MEETING_ROOM', name: 'Sala Cotopaxi', capacity: 12, equipment: 'Proyector, videoconferencia' });
-  await upsertResource({ buildingId: quito.id, type: 'MEETING_ROOM', name: 'Sala Chimborazo', capacity: 6, equipment: 'Pantalla' });
-  await upsertResource({ buildingId: guayaquil.id, type: 'MEETING_ROOM', name: 'Sala Malecón', capacity: 10, equipment: 'Proyector' });
+  await upsertResource({
+    buildingId: quito.id,
+    type: 'MEETING_ROOM',
+    name: 'Sala Pichincha',
+    capacity: 8,
+    equipment: 'Pantalla, pizarra',
+  });
+  await upsertResource({
+    buildingId: quito.id,
+    type: 'MEETING_ROOM',
+    name: 'Sala Cotopaxi',
+    capacity: 12,
+    equipment: 'Proyector, videoconferencia',
+  });
+  await upsertResource({
+    buildingId: quito.id,
+    type: 'MEETING_ROOM',
+    name: 'Sala Chimborazo',
+    capacity: 6,
+    equipment: 'Pantalla',
+  });
+  await upsertResource({
+    buildingId: guayaquil.id,
+    type: 'MEETING_ROOM',
+    name: 'Sala Malecón',
+    capacity: 10,
+    equipment: 'Proyector',
+  });
 
   // ---- Laboratorio de IA con 5 laptops (las laptops son recursos hijos del laboratorio) ----
   const lab = await upsertResource({
@@ -75,10 +101,30 @@ async function main() {
 
   // ---- Usuarios demo, uno por rol ----
   const users = [
-    { email: 'ana.asociado@demo.com', fullName: 'Ana Asociado', department: 'Desarrollo', roles: ['ASOCIADO'] },
-    { email: 'luis.lider@demo.com', fullName: 'Luis Líder de Conocimiento', department: 'Conocimiento', roles: ['ASOCIADO', 'LIDER'] },
-    { email: 'sofia.spocadmin@demo.com', fullName: 'Sofía SPOC Administrativo', department: 'Administración', roles: ['ASOCIADO', 'SPOC_ADMIN'] },
-    { email: 'carlos.spoc@demo.com', fullName: 'Carlos SPOC de Edificio', department: 'Facilities', roles: ['ASOCIADO', 'SPOC_EDIFICIO'] },
+    {
+      email: 'ana.asociado@demo.com',
+      fullName: 'Ana Asociado',
+      department: 'Desarrollo',
+      roles: ['ASOCIADO'],
+    },
+    {
+      email: 'luis.lider@demo.com',
+      fullName: 'Luis Líder de Conocimiento',
+      department: 'Conocimiento',
+      roles: ['ASOCIADO', 'LIDER'],
+    },
+    {
+      email: 'sofia.spocadmin@demo.com',
+      fullName: 'Sofía SPOC Administrativo',
+      department: 'Administración',
+      roles: ['ASOCIADO', 'SPOC_ADMIN'],
+    },
+    {
+      email: 'carlos.spoc@demo.com',
+      fullName: 'Carlos SPOC de Edificio',
+      department: 'Facilities',
+      roles: ['ASOCIADO', 'SPOC_EDIFICIO'],
+    },
     { email: 'admin@demo.com', fullName: 'Administrador Demo', department: 'TI', roles: ['ADMIN'] },
   ];
 

@@ -48,7 +48,10 @@ export class ResourcesService {
       },
     });
     if (!resource) {
-      throw new NotFoundException({ code: 'RESOURCE_NOT_FOUND', message: `No existe el recurso ${id}` });
+      throw new NotFoundException({
+        code: 'RESOURCE_NOT_FOUND',
+        message: `No existe el recurso ${id}`,
+      });
     }
     return resource;
   }
@@ -57,7 +60,10 @@ export class ResourcesService {
   private async getLab(labId: string) {
     const lab = await this.prisma.resource.findUnique({ where: { id: labId } });
     if (!lab) {
-      throw new NotFoundException({ code: 'RESOURCE_NOT_FOUND', message: `No existe el recurso ${labId}` });
+      throw new NotFoundException({
+        code: 'RESOURCE_NOT_FOUND',
+        message: `No existe el recurso ${labId}`,
+      });
     }
     if (lab.type !== 'AI_LAB') {
       throw new UnprocessableEntityException({

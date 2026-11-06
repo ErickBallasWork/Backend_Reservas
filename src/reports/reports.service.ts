@@ -30,7 +30,9 @@ const BOM = String.fromCharCode(0xfeff);
 
 function toCsv(header: string[], rows: (string | number)[][]): string {
   const escape = (value: string | number) => '"' + String(value).replaceAll('"', '""') + '"';
-  return BOM + [header.map(escape).join(','), ...rows.map((r) => r.map(escape).join(','))].join('\r\n');
+  return (
+    BOM + [header.map(escape).join(','), ...rows.map((r) => r.map(escape).join(','))].join('\r\n')
+  );
 }
 
 function rate(reserved: number, available: number): number {
@@ -51,10 +53,16 @@ export class ReportsService {
     const from = new Date(query.from);
     const to = new Date(query.to);
     if (to.getTime() <= from.getTime()) {
-      throw new BadRequestException({ code: 'INVALID_RANGE', message: '"to" debe ser posterior a "from"' });
+      throw new BadRequestException({
+        code: 'INVALID_RANGE',
+        message: '"to" debe ser posterior a "from"',
+      });
     }
     if (to.getTime() - from.getTime() > 366 * 24 * HOUR) {
-      throw new BadRequestException({ code: 'RANGE_TOO_LONG', message: 'El rango máximo es de un año' });
+      throw new BadRequestException({
+        code: 'RANGE_TOO_LONG',
+        message: 'El rango máximo es de un año',
+      });
     }
     return { from, to };
   }
@@ -121,8 +129,24 @@ export class ReportsService {
   async occupancyCsv(query: OccupancyQueryDto): Promise<string> {
     const rows = await this.occupancy(query);
     return toCsv(
-      ['id', 'nombre', 'edificio', 'tipo', 'horas_reservadas', 'horas_disponibles', 'tasa_ocupacion'],
-      rows.map((r) => [r.id, r.name, r.building, r.type, r.reservedHours, r.availableHours, r.occupancyRate]),
+      [
+        'id',
+        'nombre',
+        'edificio',
+        'tipo',
+        'horas_reservadas',
+        'horas_disponibles',
+        'tasa_ocupacion',
+      ],
+      rows.map((r) => [
+        r.id,
+        r.name,
+        r.building,
+        r.type,
+        r.reservedHours,
+        r.availableHours,
+        r.occupancyRate,
+      ]),
     );
   }
 

@@ -61,7 +61,9 @@ describe('Reglas de tiempo', () => {
     const start = new Date('2026-11-10T14:00:00Z');
     const end = new Date('2026-11-10T16:00:00Z');
     const noAdvance = { ...rules, minAdvanceHours: 0 };
-    expect(codeOf(() => validateReservationTimes(start, end, now, noAdvance))).toBe('START_IN_PAST');
+    expect(codeOf(() => validateReservationTimes(start, end, now, noAdvance))).toBe(
+      'START_IN_PAST',
+    );
   });
 });
 

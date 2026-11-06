@@ -81,7 +81,10 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException({ code: 'UNKNOWN_USER', message: 'El usuario no existe' });
     }
     if (!user.isActive) {
-      throw new ForbiddenException({ code: 'USER_INACTIVE', message: 'Tu usuario está desactivado' });
+      throw new ForbiddenException({
+        code: 'USER_INACTIVE',
+        message: 'Tu usuario está desactivado',
+      });
     }
     return toCurrentUser(user);
   }

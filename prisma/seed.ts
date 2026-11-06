@@ -18,14 +18,22 @@ async function main() {
 
   const email = process.env.INITIAL_ADMIN_EMAIL?.trim().toLowerCase();
   if (!email) {
-    console.warn('Roles listos. Falta INITIAL_ADMIN_EMAIL en el .env: no se creó el Administrador.');
+    console.warn(
+      'Roles listos. Falta INITIAL_ADMIN_EMAIL en el .env: no se creó el Administrador.',
+    );
     return;
   }
   const fullName = process.env.INITIAL_ADMIN_NAME?.trim() || email;
 
-  const admin = await prisma.user.upsert({ where: { email }, update: {}, create: { email, fullName } });
+  const admin = await prisma.user.upsert({
+    where: { email },
+    update: {},
+    create: { email, fullName },
+  });
   const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'ADMIN' } });
-  const yaEsAdmin = await prisma.userRole.findFirst({ where: { userId: admin.id, roleId: adminRole.id } });
+  const yaEsAdmin = await prisma.userRole.findFirst({
+    where: { userId: admin.id, roleId: adminRole.id },
+  });
   if (!yaEsAdmin) {
     await prisma.userRole.create({ data: { userId: admin.id, roleId: adminRole.id } });
   }

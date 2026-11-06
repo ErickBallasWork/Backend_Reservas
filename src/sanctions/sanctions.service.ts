@@ -81,7 +81,12 @@ export class SanctionsService {
           tx,
         );
         await this.audit.log(
-          { userId: null, action: 'NO_SHOW_MARKED', entity: 'Reservation', entityId: reservation.id },
+          {
+            userId: null,
+            action: 'NO_SHOW_MARKED',
+            entity: 'Reservation',
+            entityId: reservation.id,
+          },
           tx,
         );
         return true;
@@ -115,7 +120,12 @@ export class SanctionsService {
           tx,
         );
         await this.audit.log(
-          { userId: null, action: 'TRAINING_EXPIRED', entity: 'Reservation', entityId: reservation.id },
+          {
+            userId: null,
+            action: 'TRAINING_EXPIRED',
+            entity: 'Reservation',
+            entityId: reservation.id,
+          },
           tx,
         );
         return true;
@@ -158,10 +168,16 @@ export class SanctionsService {
   async resolve(admin: CurrentUserData, id: string, dto: ResolveSanctionDto) {
     const sanction = await this.prisma.sanction.findUnique({ where: { id } });
     if (!sanction) {
-      throw new NotFoundException({ code: 'SANCTION_NOT_FOUND', message: `No existe la sanción ${id}` });
+      throw new NotFoundException({
+        code: 'SANCTION_NOT_FOUND',
+        message: `No existe la sanción ${id}`,
+      });
     }
     if (sanction.status !== 'ACTIVE') {
-      throw new ConflictException({ code: 'ALREADY_RESOLVED', message: 'La sanción ya fue regularizada' });
+      throw new ConflictException({
+        code: 'ALREADY_RESOLVED',
+        message: 'La sanción ya fue regularizada',
+      });
     }
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {

@@ -142,7 +142,10 @@ export class UsersService {
   private async get(id: string) {
     const user = await this.prisma.user.findUnique({ where: { id }, include: USER_WITH_ROLES });
     if (!user) {
-      throw new NotFoundException({ code: 'USER_NOT_FOUND', message: `No existe el usuario ${id}` });
+      throw new NotFoundException({
+        code: 'USER_NOT_FOUND',
+        message: `No existe el usuario ${id}`,
+      });
     }
     return user;
   }
