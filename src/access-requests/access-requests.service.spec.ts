@@ -5,7 +5,7 @@ import { type AppConfigService } from '../config/app-config.service';
 import { type NotificationsService } from '../notifications/notifications.service';
 import { type PrismaService } from '../prisma/prisma.service';
 import { type RoleRowsService } from '../users/role-rows.service';
-import { hashDeviceSecret } from './access-request.rules';
+import { hashSecret } from '../common/secret-hash';
 import { AccessRequestsService } from './access-requests.service';
 
 const SECRET = 'a'.repeat(43);
@@ -87,7 +87,7 @@ describe('AccessRequestsService.create', () => {
       data: expect.objectContaining({
         email: 'ana@tcs.com',
         kind: 'NEW_USER',
-        deviceSecretHash: hashDeviceSecret(SECRET),
+        deviceSecretHash: hashSecret(SECRET),
       }) as unknown,
     });
     expect(notifications.notify).toHaveBeenCalledTimes(1);
@@ -160,7 +160,7 @@ describe('AccessRequestsService.status', () => {
     accessRequest.findUnique.mockResolvedValue({
       status: 'REJECTED',
       decisionComment: 'No corresponde',
-      deviceSecretHash: hashDeviceSecret(SECRET),
+      deviceSecretHash: hashSecret(SECRET),
     });
 
     await expect(service.status({ requestId: 'req-id', deviceSecret: SECRET })).resolves.toEqual({

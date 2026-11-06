@@ -17,6 +17,7 @@ export interface ServerConfig {
 export interface AuthConfig {
   jwtSecret: string;
   jwtExpiresInSeconds: number;
+  deviceIdleDays: number;
   allowedEmailDomains: string[];
   demoLoginEnabled: boolean;
 }
@@ -36,7 +37,7 @@ export interface AppConfig {
   jobs: JobsConfig;
 }
 
-const SECONDS_PER_HOUR = 3600;
+const SECONDS_PER_MINUTE = 60;
 
 export function toAppConfig(env: EnvironmentVariables): AppConfig {
   const isProduction = env.NODE_ENV === 'production';
@@ -51,7 +52,8 @@ export function toAppConfig(env: EnvironmentVariables): AppConfig {
     },
     auth: {
       jwtSecret: env.JWT_SECRET,
-      jwtExpiresInSeconds: env.JWT_EXPIRES_HOURS * SECONDS_PER_HOUR,
+      jwtExpiresInSeconds: env.JWT_EXPIRES_MINUTES * SECONDS_PER_MINUTE,
+      deviceIdleDays: env.DEVICE_IDLE_DAYS,
       allowedEmailDomains: env.ALLOWED_EMAIL_DOMAINS,
       demoLoginEnabled: env.DEMO_LOGIN_ENABLED,
     },

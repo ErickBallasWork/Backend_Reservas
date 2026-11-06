@@ -44,7 +44,8 @@ mensaje lista cada problema.
 | `APP_TIME_ZONE`            | no          | `America/Guayaquil`  | no      | Zona IANA para los textos de los avisos                                                          |
 | `DATABASE_URL`             | sí          | —                    | **sí**  | Cadena de conexión de Prisma a SQL Server                                                        |
 | `JWT_SECRET`               | sí          | —                    | **sí**  | Mínimo 32 caracteres. `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
-| `JWT_EXPIRES_HOURS`        | no          | `8`                  | no      | Duración de la sesión, de 1 a 24                                                                 |
+| `JWT_EXPIRES_MINUTES`      | no          | `15`                 | no      | Duración del access token, de 5 a 120                                                            |
+| `DEVICE_IDLE_DAYS`         | no          | `30`                 | no      | Días sin uso tras los que un dispositivo aprobado vuelve a pedir acceso, de 1 a 90               |
 | `ALLOWED_EMAIL_DOMAINS`    | sí          | —                    | no      | Dominios permitidos separados por coma, por ejemplo `tcs.com,pichincha.com`                      |
 | `DEMO_LOGIN_ENABLED`       | no          | `false`              | no      | `true` habilita `POST /auth/demo` (solo desarrollo). La API no arranca así en producción         |
 | `NOTIFY_CHANNELS`          | no          | vacío                | no      | Canales extra a la bandeja: `PUSH`, `EMAIL` o ambos                                              |
@@ -60,14 +61,15 @@ desde el panel del ADMIN.
 
 Al configurar Azure (App Settings), actualiza estos nombres:
 
-| Antes                                                                                                                    | Ahora                                              |
-| ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
-| `FRONTEND_URL`                                                                                                           | `CORS_ORIGINS`                                     |
-| `ENABLE_SWAGGER`                                                                                                         | `SWAGGER_ENABLED`                                  |
-| `DEFAULT_DEMO_USER`, `AUTH_MODE`, `DEMO_DEFAULT_USER`, `AUTO_CREATE_USERS`, `GOOGLE_CLIENT_ID`, `GOOGLE_REQUIRE_HD`      | se eliminan (ADR-023). Nuevo: `DEMO_LOGIN_ENABLED` |
-| `SLOT_MINUTES`, `MIN_ADVANCE_HOURS`, `MAX_DURATION_HOURS`, `CANCEL_MIN_HOURS`, `CHECKIN_BEFORE_MIN`, `CHECKIN_AFTER_MIN` | se eliminan                                        |
-| `DB_SA_PASSWORD`                                                                                                         | se elimina (pertenece al compose del workspace)    |
-| —                                                                                                                        | `WEBSITES_PORT=3001` en App Service                |
+| Antes                                                                                                                    | Ahora                                                       |
+| ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| `FRONTEND_URL`                                                                                                           | `CORS_ORIGINS`                                              |
+| `ENABLE_SWAGGER`                                                                                                         | `SWAGGER_ENABLED`                                           |
+| `JWT_EXPIRES_HOURS`                                                                                                      | se reemplaza por `JWT_EXPIRES_MINUTES` y `DEVICE_IDLE_DAYS` |
+| `DEFAULT_DEMO_USER`, `AUTH_MODE`, `DEMO_DEFAULT_USER`, `AUTO_CREATE_USERS`, `GOOGLE_CLIENT_ID`, `GOOGLE_REQUIRE_HD`      | se eliminan (ADR-023). Nuevo: `DEMO_LOGIN_ENABLED`          |
+| `SLOT_MINUTES`, `MIN_ADVANCE_HOURS`, `MAX_DURATION_HOURS`, `CANCEL_MIN_HOURS`, `CHECKIN_BEFORE_MIN`, `CHECKIN_AFTER_MIN` | se eliminan                                                 |
+| `DB_SA_PASSWORD`                                                                                                         | se elimina (pertenece al compose del workspace)             |
+| —                                                                                                                        | `WEBSITES_PORT=3001` en App Service                         |
 
 ## Comandos
 
@@ -105,7 +107,7 @@ nueva de `prisma/migrations`. Las migraciones ya aplicadas no se editan.
 ## Inicio de sesión
 
 - Desarrollo (`DEMO_LOGIN_ENABLED=true`): `POST /auth/demo` con el correo de un usuario del seed devuelve el token. La API no arranca así en producción.
-- Producción: el acceso es por solicitud aprobada por el SUPERADMIN (ADR-023). Se construye en S3.
+- Acceso real (ADR-023): la persona pide acceso con su correo (`POST /access-requests`), el SUPERADMIN lo aprueba o rechaza, y el navegador aprobado canjea la solicitud una sola vez (`POST /auth/device-session`) por un access token de 15 minutos y un refresh token que rota en cada uso (`POST /auth/refresh`). Cada navegador es un dispositivo: el SUPERADMIN puede ver y revocar los de un usuario, y un dispositivo sin uso por `DEVICE_IDLE_DAYS` días vuelve a pedir acceso.
 
 ## Docker y despliegue
 

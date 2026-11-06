@@ -72,6 +72,12 @@ export class UsersService {
       if (dto.isActive !== undefined) data.isActive = dto.isActive;
       if (dto.department !== undefined) data.department = dto.department.trim();
       await tx.user.update({ where: { id }, data });
+      if (dto.isActive === false) {
+        await tx.device.updateMany({
+          where: { userId: id, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      }
       await this.audit.log(
         {
           userId: admin.id,

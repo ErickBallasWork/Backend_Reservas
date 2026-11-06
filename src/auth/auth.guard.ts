@@ -11,8 +11,9 @@ import type { Request } from 'express';
 import { SUPERADMIN_ROLE } from '../common/constants';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { IS_PUBLIC_KEY } from '../common/current-user/public.decorator';
+import { AppConfigService } from '../config/app-config.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { JwtPayload } from './auth.service';
+import { JwtPayload } from './jwt-payload';
 import { toCurrentUser, USER_WITH_ROLES } from './current-user.mapper';
 import { ROLES_KEY } from './roles.decorator';
 
@@ -22,6 +23,7 @@ export class AuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
+    private readonly appConfig: AppConfigService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -57,10 +59,31 @@ export class AuthGuard implements CanActivate {
           message: 'Tu sesión no es válida o expiró. Inicia sesión de nuevo.',
         });
       }
+      await this.assertDeviceAuthorized(payload);
       return this.loadUser(payload.sub);
     }
 
     throw new UnauthorizedException({ code: 'NO_TOKEN', message: 'Inicia sesión para continuar' });
+  }
+
+  private async assertDeviceAuthorized(payload: JwtPayload): Promise<void> {
+    if (!payload.did) {
+      if (this.appConfig.auth.demoLoginEnabled) return;
+      throw new UnauthorizedException({
+        code: 'INVALID_TOKEN',
+        message: 'Tu sesión no es válida o expiró. Inicia sesión de nuevo.',
+      });
+    }
+    const device = await this.prisma.device.findUnique({
+      where: { id: payload.did },
+      select: { revokedAt: true },
+    });
+    if (!device || device.revokedAt) {
+      throw new UnauthorizedException({
+        code: 'DEVICE_NOT_AUTHORIZED',
+        message: 'Este dispositivo ya no está autorizado. Pide acceso de nuevo.',
+      });
+    }
   }
 
   private async loadUser(id: string): Promise<CurrentUserData> {

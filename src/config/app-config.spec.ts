@@ -31,7 +31,8 @@ describe('loadAppConfig', () => {
       swaggerEnabled: true,
       timeZone: 'America/Guayaquil',
     });
-    expect(config.auth.jwtExpiresInSeconds).toBe(8 * 3600);
+    expect(config.auth.jwtExpiresInSeconds).toBe(15 * 60);
+    expect(config.auth.deviceIdleDays).toBe(30);
     expect(config.auth.demoLoginEnabled).toBe(false);
     expect(config.notifications.extraChannels).toEqual([]);
     expect(config.jobs.jobKey).toBeNull();

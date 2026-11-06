@@ -1,20 +1,14 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { CurrentUserData } from '../common/current-user/current-user.types';
 import { AppConfigService } from '../config/app-config.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { toCurrentUser, USER_WITH_ROLES } from './current-user.mapper';
-
-export interface JwtPayload {
-  sub: string;
-  email: string;
-}
+import { SessionService } from './session.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly jwt: JwtService,
+    private readonly sessions: SessionService,
     private readonly appConfig: AppConfigService,
   ) {}
 
@@ -32,17 +26,6 @@ export class AuthService {
         message: `No existe un usuario activo con el correo ${email}`,
       });
     }
-    return this.issueSession(toCurrentUser(user));
-  }
-
-  private async issueSession(user: CurrentUserData) {
-    const payload: JwtPayload = { sub: user.id, email: user.email };
-    const accessToken = await this.jwt.signAsync(payload);
-    return {
-      accessToken,
-      tokenType: 'Bearer',
-      expiresIn: this.appConfig.auth.jwtExpiresInSeconds,
-      user,
-    };
+    return this.sessions.issue(toCurrentUser(user));
   }
 }

@@ -75,9 +75,15 @@ export class EnvironmentVariables {
 
   @Type(() => Number)
   @IsInt()
+  @Min(5)
+  @Max(120)
+  JWT_EXPIRES_MINUTES = 15;
+
+  @Type(() => Number)
+  @IsInt()
   @Min(1)
-  @Max(24)
-  JWT_EXPIRES_HOURS = 8;
+  @Max(90)
+  DEVICE_IDLE_DAYS = 30;
 
   @Transform(toList((domain) => domain.toLowerCase()))
   @ArrayNotEmpty()

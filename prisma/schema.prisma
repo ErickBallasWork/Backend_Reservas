@@ -92,6 +92,7 @@ model User {
   auditLogs         AuditLog[]
   checkIns          CheckIn[]
   accessDecisions   AccessRequest[] @relation("AccessRequestDecider")
+  devices           Device[]
 
   @@map("USERS")
 }
@@ -111,12 +112,33 @@ model AccessRequest {
   decidedAt        DateTime? @map("DecidedAt")
   decidedById      String?   @map("DecidedById") @db.UniqueIdentifier
   decisionComment  String?   @map("DecisionComment") @db.NVarChar(500)
+  redeemedAt       DateTime? @map("RedeemedAt")
 
   decidedBy User? @relation("AccessRequestDecider", fields: [decidedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([status, requestedAt])
   @@index([email, status])
   @@map("ACCESS_REQUEST")
+}
+
+// Navegador aprobado de un usuario. Guarda solo hashes del refresh token, que rota en cada uso.
+model Device {
+  id                       String    @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  userId                   String    @map("UserId") @db.UniqueIdentifier
+  label                    String?   @map("Label") @db.NVarChar(200)
+  refreshTokenHash         String    @unique @map("RefreshTokenHash") @db.NVarChar(64)
+  previousRefreshTokenHash String?   @map("PreviousRefreshTokenHash") @db.NVarChar(64)
+  rotatedAt                DateTime? @map("RotatedAt")
+  expiresAt                DateTime  @map("ExpiresAt")
+  createdAt                DateTime  @default(now()) @map("CreatedAt")
+  lastUsedAt               DateTime  @default(now()) @map("LastUsedAt")
+  revokedAt                DateTime? @map("RevokedAt")
+
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([userId])
+  @@index([previousRefreshTokenHash])
+  @@map("DEVICE")
 }
 
 // ASOCIADO | ADMIN | SPOC_ADMIN | LIDER | SPOC_EDIFICIO | SUPERADMIN (se cargan con el seed)

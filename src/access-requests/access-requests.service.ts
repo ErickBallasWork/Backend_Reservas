@@ -15,16 +15,12 @@ import {
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { Db, isUniqueViolation } from '../common/db.types';
 import { toSkipTake } from '../common/pagination.dto';
+import { hashSecret, matchesSecretHash } from '../common/secret-hash';
 import { AppConfigService } from '../config/app-config.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RoleRowsService } from '../users/role-rows.service';
-import {
-  cooldownEndsAt,
-  hashDeviceSecret,
-  isAllowedDomain,
-  matchesDeviceSecret,
-} from './access-request.rules';
+import { cooldownEndsAt, isAllowedDomain } from './access-request.rules';
 import {
   AccessRequestStatusQueryDto,
   ApproveAccessRequestDto,
@@ -68,7 +64,7 @@ export class AccessRequestsService {
             fullName: existingUser?.fullName ?? dto.fullName.trim(),
             department: dto.department?.trim() || existingUser?.department,
             kind,
-            deviceSecretHash: hashDeviceSecret(dto.deviceSecret),
+            deviceSecretHash: hashSecret(dto.deviceSecret),
             deviceLabel: dto.deviceLabel?.trim(),
           },
         });
@@ -94,7 +90,7 @@ export class AccessRequestsService {
 
   async status(dto: AccessRequestStatusQueryDto) {
     const request = await this.prisma.accessRequest.findUnique({ where: { id: dto.requestId } });
-    if (!request || !matchesDeviceSecret(dto.deviceSecret, request.deviceSecretHash)) {
+    if (!request || !matchesSecretHash(dto.deviceSecret, request.deviceSecretHash)) {
       throw this.notFound();
     }
     return {

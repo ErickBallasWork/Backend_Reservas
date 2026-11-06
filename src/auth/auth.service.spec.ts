@@ -1,16 +1,17 @@
-import { type JwtService } from '@nestjs/jwt';
 import { type AppConfigService } from '../config/app-config.service';
 import { type PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
+import { type SessionService } from './session.service';
 
 function buildService(demoLoginEnabled: boolean) {
   const findUnique = jest.fn();
+  const issue = jest.fn().mockResolvedValue({ accessToken: 'signed-token' });
   const service = new AuthService(
     { user: { findUnique } } as unknown as PrismaService,
-    { signAsync: jest.fn().mockResolvedValue('signed-token') } as unknown as JwtService,
-    { auth: { demoLoginEnabled, jwtExpiresInSeconds: 900 } } as unknown as AppConfigService,
+    { issue } as unknown as SessionService,
+    { auth: { demoLoginEnabled } } as unknown as AppConfigService,
   );
-  return { service, findUnique };
+  return { service, findUnique, issue };
 }
 
 describe('AuthService.loginDemo', () => {
@@ -32,8 +33,8 @@ describe('AuthService.loginDemo', () => {
     });
   });
 
-  it('issues a session for an active user', async () => {
-    const { service, findUnique } = buildService(true);
+  it('issues a session without a device for an active user', async () => {
+    const { service, findUnique, issue } = buildService(true);
     findUnique.mockResolvedValue({
       id: 'u',
       email: 'ana.asociado@demo.com',
@@ -42,9 +43,9 @@ describe('AuthService.loginDemo', () => {
       roles: [{ buildingId: null, role: { name: 'ASOCIADO' } }],
     });
 
-    const session = await service.loginDemo(' Ana.Asociado@demo.com ');
+    await service.loginDemo(' Ana.Asociado@demo.com ');
 
-    expect(session).toMatchObject({ accessToken: 'signed-token', tokenType: 'Bearer' });
-    expect(session.user.roles).toEqual(['ASOCIADO']);
+    expect(issue).toHaveBeenCalledWith(expect.objectContaining({ roles: ['ASOCIADO'] }));
+    expect(issue.mock.calls[0]).toHaveLength(1);
   });
 });

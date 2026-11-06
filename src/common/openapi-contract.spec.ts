@@ -6,6 +6,8 @@ import { DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swag
 import { AccessRequestsController } from '../access-requests/access-requests.controller';
 import { AccessRequestsService } from '../access-requests/access-requests.service';
 import { AuthController } from '../auth/auth.controller';
+import { DevicesController } from '../auth/devices.controller';
+import { DevicesService } from '../auth/devices.service';
 import { AuthService } from '../auth/auth.service';
 import { BuildingsController } from '../catalog/buildings.controller';
 import { BuildingsService } from '../catalog/buildings.service';
@@ -29,6 +31,9 @@ const DOCUMENTED_OPERATIONS: [string, string][] = [
   ['post', '/resources'],
   ['patch', '/resources/{id}'],
   ['post', '/auth/demo'],
+  ['post', '/auth/device-session'],
+  ['post', '/auth/refresh'],
+  ['get', '/users/{userId}/devices'],
   ['post', '/access-requests'],
   ['post', '/access-requests/status'],
   ['get', '/access-requests'],
@@ -53,6 +58,7 @@ describe('OpenAPI contract', () => {
       controllers: [
         AuthController,
         AccessRequestsController,
+        DevicesController,
         BuildingsController,
         CatalogController,
         ResourcesController,
@@ -60,6 +66,7 @@ describe('OpenAPI contract', () => {
       providers: [
         { provide: AuthService, useValue: {} },
         { provide: AccessRequestsService, useValue: {} },
+        { provide: DevicesService, useValue: {} },
         { provide: AppConfigService, useValue: {} },
         { provide: BuildingsService, useValue: {} },
         { provide: ResourcesService, useValue: {} },

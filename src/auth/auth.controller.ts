@@ -1,21 +1,57 @@
 import { Body, Controller, HttpCode, Post } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AccessRequestStatusQueryDto } from '../access-requests/dto/access-request.dto';
 import { Public } from '../common/current-user/public.decorator';
 import { ApiErrorResponses } from '../common/error-response.dto';
 import { AuthService } from './auth.service';
-import { DemoLoginDto } from './dto/auth.dto';
-import { SessionResponseDto } from './dto/auth-response.dto';
+import { DevicesService } from './devices.service';
+import { DemoLoginDto, RefreshDto } from './dto/auth.dto';
+import { DeviceSessionResponseDto, SessionResponseDto } from './dto/auth-response.dto';
 
 @ApiTags('Autenticación')
-@ApiErrorResponses(400, 401, 403, 404)
+@ApiErrorResponses(400, 401, 403, 404, 409)
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly devices: DevicesService,
+  ) {}
+
+  @Public()
+  @Post('device-session')
+  @HttpCode(200)
+  @ApiOkResponse({ type: DeviceSessionResponseDto })
+  @ApiOperation({
+    summary: 'Primer ingreso de un dispositivo con una solicitud aprobada (una sola vez)',
+  })
+  deviceSession(@Body() dto: AccessRequestStatusQueryDto) {
+    return this.devices.redeem(dto);
+  }
+
+  @Public()
+  @Post('refresh')
+  @HttpCode(200)
+  @ApiOkResponse({ type: DeviceSessionResponseDto })
+  @ApiOperation({
+    summary: 'Renovar la sesión de un dispositivo aprobado. El refresh token rota en cada uso',
+  })
+  refresh(@Body() dto: RefreshDto) {
+    return this.devices.refresh(dto);
+  }
+
+  @Public()
+  @Post('logout')
+  @HttpCode(204)
+  @ApiNoContentResponse()
+  @ApiOperation({ summary: 'Cerrar sesión: revoca el dispositivo dueño del refresh token' })
+  logout(@Body() dto: RefreshDto) {
+    return this.devices.logout(dto);
+  }
 
   @Public()
   @Post('demo')
-  @ApiOkResponse({ type: SessionResponseDto })
   @HttpCode(200)
+  @ApiOkResponse({ type: SessionResponseDto })
   @ApiOperation({
     summary: 'Solo desarrollo (DEMO_LOGIN_ENABLED=true): iniciar sesión como usuario demo',
   })
