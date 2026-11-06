@@ -20,6 +20,8 @@ import { ResourcesService } from '../catalog/resources.service';
 import { AppConfigService } from '../config/app-config.service';
 import { ReservationsController } from '../reservations/reservations.controller';
 import { ReservationsService } from '../reservations/reservations.service';
+import { OperatingHoursController } from '../operating-hours/operating-hours.controller';
+import { OperatingHoursService } from '../operating-hours/operating-hours.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ManagedAssociatesController } from '../users/managed-associates.controller';
 import { ManagedAssociatesService } from '../users/managed-associates.service';
@@ -57,6 +59,10 @@ const DOCUMENTED_OPERATIONS: [string, string][] = [
   ['get', '/access-requests'],
   ['post', '/access-requests/{id}/approve'],
   ['post', '/access-requests/{id}/reject'],
+  ['get', '/operating-hours'],
+  ['put', '/operating-hours'],
+  ['get', '/closed-dates'],
+  ['post', '/closed-dates'],
   ['get', '/availability/search'],
   ['get', '/availability/resources/{id}'],
   ['post', '/reservations'],
@@ -91,6 +97,7 @@ describe('OpenAPI contract', () => {
         ResourcesController,
         AvailabilityController,
         ReservationsController,
+        OperatingHoursController,
       ],
       providers: [
         { provide: AuthService, useValue: {} },
@@ -104,6 +111,7 @@ describe('OpenAPI contract', () => {
         { provide: CatalogTreeService, useValue: {} },
         { provide: AvailabilityService, useValue: {} },
         { provide: ReservationsService, useValue: {} },
+        { provide: OperatingHoursService, useValue: {} },
         { provide: PrismaService, useValue: {} },
       ],
     }).compile();

@@ -2,6 +2,14 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { NamedReferenceDto } from '../../catalog/dto/catalog-response.dto';
 import { RESOURCE_TYPES, type ResourceType } from '../../common/constants';
 
+export class OpenWindowDto {
+  @ApiProperty({ format: 'date-time' })
+  start!: string;
+
+  @ApiProperty({ format: 'date-time' })
+  end!: string;
+}
+
 export class LaptopAvailabilityDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;
@@ -15,6 +23,9 @@ export class LaptopAvailabilityDto {
     description: 'Start of every occupied slot of the laptop in the range',
   })
   busySlots!: string[];
+
+  @ApiProperty({ type: [OpenWindowDto], description: 'Ranges in which the laptop can be booked' })
+  openWindows!: OpenWindowDto[];
 }
 
 export class ResourceAvailabilityResponseDto {
@@ -43,6 +54,12 @@ export class ResourceAvailabilityResponseDto {
   })
   busySlots!: string[];
 
+  @ApiProperty({
+    type: [OpenWindowDto],
+    description: 'Ranges inside the range in which the resource can be booked (RF-17)',
+  })
+  openWindows!: OpenWindowDto[];
+
   @ApiProperty({ type: [LaptopAvailabilityDto], description: 'Active laptops of an AI lab' })
   laptops!: LaptopAvailabilityDto[];
 }
@@ -66,8 +83,12 @@ export class AvailabilitySearchItemDto {
   @ApiProperty({ type: NamedReferenceDto })
   building!: NamedReferenceDto;
 
+  @ApiProperty({ description: 'The whole range is inside the operating hours' })
+  open!: boolean;
+
   @ApiProperty({
-    description: 'No slot is occupied in the range. An AI lab also needs all its laptops free',
+    description:
+      'Open and with no occupied slot in the range. An AI lab also needs all its laptops free',
   })
   free!: boolean;
 

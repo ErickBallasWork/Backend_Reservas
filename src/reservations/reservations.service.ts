@@ -19,6 +19,8 @@ import { isUniqueViolation } from '../common/db.types';
 import { toSkipTake } from '../common/pagination.dto';
 import { ReservationRulesService } from '../config/reservation-rules.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { toLocalSlots } from '../operating-hours/operating-calendar';
+import { OperatingHoursService } from '../operating-hours/operating-hours.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SanctionsService } from '../sanctions/sanctions.service';
 import { CheckInDto, CreateReservationDto, MyReservationsQueryDto } from './dto/reservation.dto';
@@ -56,6 +58,7 @@ export class ReservationsService {
     private readonly notifications: NotificationsService,
     private readonly audit: AuditService,
     private readonly reservationRules: ReservationRulesService,
+    private readonly operatingHours: OperatingHoursService,
   ) {}
 
   static toHttpError(error: unknown): never {
@@ -92,6 +95,14 @@ export class ReservationsService {
         ? [resource.id, ...(await this.lookup.activeLaptopIds(resource.id))]
         : [resource.id];
     const slotStarts = buildSlotStarts(start, end, rules.slotMinutes);
+    try {
+      await this.operatingHours.assertOpen(
+        resource,
+        toLocalSlots(slotStarts, this.operatingHours.timeZone),
+      );
+    } catch (error) {
+      ReservationsService.toHttpError(error);
+    }
     const status = dto.purpose === 'TRAINING' ? Status.PENDING_APPROVAL : Status.CONFIRMED;
     const label =
       resource.type === 'LAPTOP'

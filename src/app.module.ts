@@ -9,6 +9,7 @@ import { AppConfigModule } from './config/app-config.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { HealthModule } from './health/health.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { OperatingHoursModule } from './operating-hours/operating-hours.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ReallocationsModule } from './reallocations/reallocations.module';
 import { ReportsModule } from './reports/reports.module';
@@ -29,6 +30,7 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     AccessRequestsModule,
     CatalogModule,
+    OperatingHoursModule,
     AvailabilityModule,
     SanctionsModule,
     ReservationsModule,

@@ -64,11 +64,39 @@ model Resource {
   slots             ReservationSlot[]
   reallocationsFrom Reallocation[]    @relation("ReallocationPrevious")
   reallocationsTo   Reallocation[]    @relation("ReallocationNew")
+  operatingHours    OperatingHours[]
+  closedDates       ClosedDate[]
 
   @@unique([buildingId, name])
   @@index([type])
   @@index([parentResourceId])
   @@map("RESOURCE")
+}
+
+model OperatingHours {
+  id             String  @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  resourceId     String? @map("ResourceId") @db.UniqueIdentifier
+  dayOfWeek      Int     @map("DayOfWeek")
+  opensAtMinute  Int     @map("OpensAtMinute")
+  closesAtMinute Int     @map("ClosesAtMinute")
+
+  resource Resource? @relation(fields: [resourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([resourceId, dayOfWeek, opensAtMinute])
+  @@map("OPERATING_HOURS")
+}
+
+model ClosedDate {
+  id         String   @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  resourceId String?  @map("ResourceId") @db.UniqueIdentifier
+  date       DateTime @map("Date") @db.Date
+  name       String   @map("Name") @db.NVarChar(150)
+  createdAt  DateTime @default(now()) @map("CreatedAt")
+
+  resource Resource? @relation(fields: [resourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([resourceId, date])
+  @@map("CLOSED_DATE")
 }
 
 // ---------------- Usuarios y roles ----------------

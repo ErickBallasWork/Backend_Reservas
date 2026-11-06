@@ -1,8 +1,16 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { CatalogLookupService } from '../catalog/catalog-lookup.service';
 import { ReservationRulesService } from '../config/reservation-rules.service';
+import {
+  findClosedSlot,
+  toLocalSlots,
+  toOpenWindows,
+  type OperatingCalendar,
+} from '../operating-hours/operating-calendar';
+import { OperatingHoursService } from '../operating-hours/operating-hours.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { chunk } from '../reservations/time-rules';
+import { buildSlotStarts, chunk } from '../reservations/time-rules';
 import { RangeQueryDto, SearchAvailabilityQueryDto } from './dto/availability.dto';
 
 const MAX_RANGE_DAYS = 14;
@@ -12,6 +20,8 @@ export class AvailabilityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly reservationRules: ReservationRulesService,
+    private readonly lookup: CatalogLookupService,
+    private readonly operatingHours: OperatingHoursService,
   ) {}
 
   private parseRange(query: RangeQueryDto) {
@@ -47,8 +57,17 @@ export class AvailabilityService {
     return busy;
   }
 
+  private rangeSlots(from: Date, to: Date) {
+    const slotMinutes = this.reservationRules.current().slotMinutes;
+    return {
+      slotMinutes,
+      slots: toLocalSlots(buildSlotStarts(from, to, slotMinutes), this.operatingHours.timeZone),
+    };
+  }
+
   async resource(resourceId: string, query: RangeQueryDto) {
     const { from, to } = this.parseRange(query);
+    await this.lookup.getActiveResource(resourceId);
     const resource = await this.prisma.resource.findUnique({
       where: { id: resourceId },
       include: { children: { where: { isActive: true }, orderBy: { name: 'asc' } } },
@@ -64,18 +83,27 @@ export class AvailabilityService {
       from,
       to,
     );
+    const { slotMinutes, slots } = this.rangeSlots(from, to);
+    const book = await this.operatingHours.loadBook();
+    const windowsOf = (calendar: OperatingCalendar) =>
+      toOpenWindows(slots, slotMinutes, calendar).map((w) => ({
+        start: w.start.toISOString(),
+        end: w.end.toISOString(),
+      }));
     return {
       resourceId: resource.id,
       name: resource.name,
       type: resource.type,
-      slotMinutes: this.reservationRules.current().slotMinutes,
+      slotMinutes,
       from: from.toISOString(),
       to: to.toISOString(),
       busySlots: busy.get(resource.id) ?? [],
+      openWindows: windowsOf(book.calendarFor(resource)),
       laptops: resource.children.map((l) => ({
         id: l.id,
         name: l.name,
         busySlots: busy.get(l.id) ?? [],
+        openWindows: windowsOf(book.calendarFor(l)),
       })),
     };
   }
@@ -103,9 +131,14 @@ export class AvailabilityService {
     const busy =
       ids.length > 0 ? await this.busyByResource(ids, from, to) : new Map<string, string[]>();
     const isFree = (id: string) => (busy.get(id) ?? []).length === 0;
+    const { slotMinutes, slots } = this.rangeSlots(from, to);
+    const book = await this.operatingHours.loadBook();
+    const isOpen = (resource: { id: string; parentResourceId: string | null }) =>
+      findClosedSlot(slots, slotMinutes, book.calendarFor(resource)) === null;
 
     return resources.map((r) => {
       const freeLaptops = r.children.filter((c) => isFree(c.id)).length;
+      const open = isOpen(r);
       return {
         id: r.id,
         name: r.name,
@@ -113,8 +146,10 @@ export class AvailabilityService {
         capacity: r.capacity,
         equipment: r.equipment,
         building: r.building,
+        open,
         free:
-          r.type === 'AI_LAB' ? isFree(r.id) && freeLaptops === r.children.length : isFree(r.id),
+          open &&
+          (r.type === 'AI_LAB' ? isFree(r.id) && freeLaptops === r.children.length : isFree(r.id)),
         ...(r.type === 'AI_LAB' ? { totalLaptops: r.children.length, freeLaptops } : {}),
       };
     });
