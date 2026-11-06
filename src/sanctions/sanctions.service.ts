@@ -6,12 +6,13 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
-import { Status } from '../common/constants';
+import { Status, TransferStatus } from '../common/constants';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { toSkipTake } from '../common/pagination.dto';
 import { reservationRules } from '../config/reservation-rules';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { closePendingTransfers } from '../transfers/transfer-helpers';
 import { ListSanctionsQueryDto, ResolveSanctionDto } from './dto/sanction.dto';
 
 @Injectable()
@@ -123,7 +124,29 @@ export class SanctionsService {
       if (done) expiredTrainings++;
     }
 
-    return { noShows, expiredTrainings };
+    // 3) Solicitudes de cesión sin respuesta cuya reserva ya empezó: se cierran y se avisa.
+    const startedWithRequests = await this.prisma.transferRequest.findMany({
+      where: {
+        status: TransferStatus.PENDING,
+        reservation: { startDateTime: { lte: now } },
+        ...(filter.userId ? { requesterId: filter.userId } : {}),
+      },
+      select: { reservationId: true },
+      distinct: ['reservationId'],
+      take: 200,
+    });
+
+    let expiredTransfers = 0;
+    for (const { reservationId } of startedWithRequests) {
+      expiredTransfers += await this.prisma.$transaction((tx) =>
+        closePendingTransfers(tx, this.notifications, reservationId, {
+          title: 'Solicitud de cesión vencida',
+          message: 'La reserva que pediste ya empezó y su dueño no respondió a tiempo.',
+        }),
+      );
+    }
+
+    return { noShows, expiredTrainings, expiredTransfers };
   }
 
   async list(query: ListSanctionsQueryDto) {

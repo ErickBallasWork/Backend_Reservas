@@ -16,6 +16,7 @@ import { reservationRules } from '../config/reservation-rules';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SanctionsService } from '../sanctions/sanctions.service';
+import { closePendingTransfers } from '../transfers/transfer-helpers';
 import { CheckInDto, CreateReservationDto, MyReservationsQueryDto } from './dto/reservation.dto';
 import { insertSlots } from './slots';
 import {
@@ -309,6 +310,11 @@ export class ReservationsService {
     await this.prisma.$transaction(async (tx) => {
       await tx.reservationSlot.deleteMany({ where: { reservationId: id } });
       await tx.reservation.update({ where: { id }, data: { status: Status.CANCELLED } });
+      // Quien había pedido esta reserva en cesión se entera de que el horario quedó libre.
+      await closePendingTransfers(tx, this.notifications, id, {
+        title: 'La reserva que pediste se liberó',
+        message: 'Su dueño la canceló y el horario quedó libre. Si todavía lo necesitas, intenta reservarlo.',
+      });
       await this.audit.log(
         { userId: user.id, action: 'RESERVATION_CANCELLED', entity: 'Reservation', entityId: id },
         tx,
