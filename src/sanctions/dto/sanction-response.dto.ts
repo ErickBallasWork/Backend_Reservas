@@ -51,6 +51,9 @@ export class SanctionResponseDto {
   @ApiProperty({ format: 'date-time', nullable: true })
   resolvedAt!: Date | null;
 
+  @ApiProperty({ nullable: true, description: 'Reason given by the administrator on resolving' })
+  resolutionComment!: string | null;
+
   @ApiProperty({ type: ReservationOwnerDto })
   user!: ReservationOwnerDto;
 

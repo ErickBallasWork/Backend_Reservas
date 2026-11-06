@@ -190,17 +190,28 @@ export class SanctionsService {
     }
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
-      const resolved = await tx.sanction.update({
-        where: { id },
-        data: { status: 'RESOLVED', endDate: now, resolvedById: admin.id, resolvedAt: now },
-        include: SANCTION_INCLUDE,
+      const updated = await tx.sanction.updateMany({
+        where: { id, status: 'ACTIVE' },
+        data: {
+          status: 'RESOLVED',
+          endDate: now,
+          resolvedById: admin.id,
+          resolvedAt: now,
+          resolutionComment: dto.comment,
+        },
       });
+      if (updated.count === 0) {
+        throw new ConflictException({
+          code: 'ALREADY_RESOLVED',
+          message: 'La sanción ya fue regularizada',
+        });
+      }
       await this.notifications.notify(
         {
           userId: sanction.userId,
           type: 'SANCTION_RESOLVED',
           title: 'Sanción regularizada',
-          message: 'Ya puedes volver a reservar.',
+          message: `Ya puedes volver a reservar. Motivo: ${dto.comment}`,
         },
         tx,
       );
@@ -210,10 +221,18 @@ export class SanctionsService {
           action: 'SANCTION_RESOLVED',
           entity: 'Sanction',
           entityId: id,
-          details: { comment: dto.comment ?? null },
+          details: {
+            comment: dto.comment,
+            affectedUserId: sanction.userId,
+            reservationId: sanction.reservationId,
+          },
         },
         tx,
       );
+      const resolved = await tx.sanction.findUniqueOrThrow({
+        where: { id },
+        include: SANCTION_INCLUDE,
+      });
       return toSanctionView(resolved);
     });
   }

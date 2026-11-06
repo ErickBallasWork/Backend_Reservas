@@ -347,19 +347,21 @@ model Reallocation {
 }
 
 model Sanction {
-  id            String    @id @default(uuid()) @map("Id") @db.UniqueIdentifier
-  userId        String    @map("UserId") @db.UniqueIdentifier
-  reservationId String    @map("ReservationId") @db.UniqueIdentifier
+  id                String    @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  userId            String    @map("UserId") @db.UniqueIdentifier
+  reservationId     String    @map("ReservationId") @db.UniqueIdentifier
   // NO_SHOW
-  type          String    @default("NO_SHOW") @map("Type") @db.NVarChar(20)
-  reason        String    @map("Reason") @db.NVarChar(300)
-  startDate     DateTime  @default(now()) @map("StartDate")
+  type              String    @default("NO_SHOW") @map("Type") @db.NVarChar(20)
+  reason            String    @map("Reason") @db.NVarChar(300)
+  startDate         DateTime  @default(now()) @map("StartDate")
   // Vacío mientras esté activa: dura hasta que un Administrador la regularice (RF-12)
-  endDate       DateTime? @map("EndDate")
+  endDate           DateTime? @map("EndDate")
   // ACTIVE | RESOLVED
-  status        String    @map("Status") @db.NVarChar(10)
-  resolvedById  String?   @map("ResolvedById") @db.UniqueIdentifier
-  resolvedAt    DateTime? @map("ResolvedAt")
+  status            String    @map("Status") @db.NVarChar(10)
+  resolvedById      String?   @map("ResolvedById") @db.UniqueIdentifier
+  resolvedAt        DateTime? @map("ResolvedAt")
+  // Motivo que dejó el Administrador al regularizar
+  resolutionComment String?   @map("ResolutionComment") @db.NVarChar(500)
 
   user        User        @relation("SanctionUser", fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   resolvedBy  User?       @relation("SanctionResolver", fields: [resolvedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
