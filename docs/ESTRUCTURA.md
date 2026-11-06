@@ -4,62 +4,71 @@ Guía rápida del proyecto. Si solo vas a leer una parte, lee **"Cómo viaja una
 
 ## Archivos de la raíz
 
-| Archivo               | Para qué sirve                                                                                                          | ¿Lo tocas?                            |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| `package.json`        | Lista de librerías (dependencias) y **comandos** (`npm run ...`). También le dice a Prisma cómo correr el seed.         | Solo para añadir librerías o comandos |
-| `package-lock.json`   | Aparece con `npm install`. Fija la versión exacta de cada librería para que todos tengan lo mismo. **Se sube al repo.** | No a mano                             |
-| `tsconfig.json`       | Configuración de TypeScript (cómo se compila el código).                                                                | No                                    |
-| `tsconfig.build.json` | Igual, pero para `npm run build`: deja fuera pruebas y carpeta `prisma`.                                                | No                                    |
-| `nest-cli.json`       | Configuración de la CLI de Nest. Activa el plugin de Swagger que documenta los DTO solo.                                | No                                    |
-| `.env.example`        | Plantilla de variables de entorno, **sin secretos reales**. Se sube al repo.                                            | Cuando añades una variable nueva      |
-| `.env`                | Tu copia real con contraseñas y secretos. **Nunca se sube** (está en `.gitignore`).                                     | Sí, es tu configuración local         |
-| `.gitignore`          | Lo que Git ignora: `node_modules`, `dist`, `.env`...                                                                    | Rara vez                              |
-| `.prettierrc`         | Reglas de formato (comillas, ancho de línea). VS Code formatea al guardar con la extensión Prettier.                    | No                                    |
-| `README.md`           | Resumen y comandos para arrancar.                                                                                       | Cuando cambie algo importante         |
-| `azure-pipelines.yml` | **CI en Azure DevOps**: en cada push a `develop` o `main` instala, corre pruebas, compila y revisa vulnerabilidades.    | Cuando DevOps lo pida                 |
+| Archivo                  | Para qué sirve                                                                                                  | ¿Lo tocas?                            |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `package.json`           | Librerías, **comandos** (`npm run ...`), `engines` (Node 22) y la configuración de `lint-staged`.               | Solo para añadir librerías o comandos |
+| `package-lock.json`      | Versión exacta de cada librería. Se genera con npm 10 (el de Node 22). **Se sube al repo.**                     | No a mano                             |
+| `.nvmrc`                 | Versión de Node del proyecto (22). `nvm use` la activa.                                                         | No                                    |
+| `tsconfig.json`          | Configuración de TypeScript en modo `strict`.                                                                   | No                                    |
+| `tsconfig.build.json`    | Igual, pero para `npm run build`: deja fuera pruebas y la carpeta `prisma`.                                     | No                                    |
+| `nest-cli.json`          | Configuración de la CLI de Nest. Activa el plugin de Swagger que documenta los DTO.                             | No                                    |
+| `eslint.config.mjs`      | Reglas de ESLint (TypeScript con tipos, sin `any`, imports de tipos, sin `console` fuera de `prisma/`).         | Rara vez                              |
+| `.prettierrc`            | Formato: comillas simples, coma final, 100 columnas, fin de línea LF. Igual que en el frontend.                 | No                                    |
+| `.prettierignore`        | Lo que Prettier no formatea (migraciones, `dist`, lockfile).                                                    | Rara vez                              |
+| `.editorconfig`          | Indentación y fin de línea para cualquier editor.                                                               | No                                    |
+| `.gitattributes`         | Fuerza fin de línea LF en el repo, también en Windows.                                                          | No                                    |
+| `.git-blame-ignore-revs` | Commits de solo formato que `git blame` debe saltar (`git config blame.ignoreRevsFile .git-blame-ignore-revs`). | Al hacer un commit de formato masivo  |
+| `commitlint.config.mjs`  | Exige Conventional Commits en cada mensaje.                                                                     | No                                    |
+| `.husky/`                | Hooks de git: `pre-commit` corre `lint-staged` y `commit-msg` corre `commitlint`.                               | No                                    |
+| `.env.example`           | Plantilla de variables de entorno, **sin secretos reales**. Se sube al repo.                                    | Cuando añades una variable nueva      |
+| `.env`                   | Tu copia real con contraseñas y secretos. **Nunca se sube** (está en `.gitignore`).                             | Sí, es tu configuración local         |
+| `.gitignore`             | Lo que Git ignora: `node_modules`, `dist`, `.env`, archivos de Claude...                                        | Rara vez                              |
+| `README.md`              | Arranque, variables de entorno, comandos y despliegue.                                                          | Cuando cambie algo importante         |
 
-## Archivos de Docker
+## Docker y CI
 
-Docker corre programas dentro de "contenedores": cajas aisladas que traen todo lo que necesitan. Aquí se usa
-para tener SQL Server en tu PC sin instalarlo, y para empaquetar la API como se publicará en Azure.
+| Archivo                        | Para qué sirve                                                                                                                                                                            |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Dockerfile`                   | **Imagen de la API** para Azure App Service. Etapa 1: instala, genera Prisma y compila. Etapa 2: copia solo lo necesario, corre como usuario sin privilegios y escucha en el puerto 3001. |
+| `docker/start.sh`              | Comando de arranque del contenedor: `prisma migrate deploy` con reintentos y luego la API.                                                                                                |
+| `.dockerignore`                | Lo que no se copia a la imagen (`node_modules`, `.env`, `.git`, docs...). Evita meter secretos en la imagen.                                                                              |
+| `.github/workflows/ci.yml`     | Quality gate: lint, formato, typecheck, tests, build y construcción de la imagen. Corre en PR a `develop` y `main` y en push a `develop`.                                                 |
+| `.github/workflows/deploy.yml` | En push a `main`: repite el quality gate, publica la imagen en GHCR (etiqueta del commit y `latest`) y la despliega en App Service.                                                       |
 
-| Archivo              | Para qué sirve                                                                                                                                                                                                                                                                                                                                               |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `docker-compose.yml` | **Tu base de datos local.** Define el servicio `db` (SQL Server 2022, puerto 1433) y un volumen `sqldata` donde quedan guardados los datos aunque apagues el contenedor. `npm run db:up` lo enciende. Tiene un segundo servicio opcional, `api`, que solo arranca con `docker compose --profile completo up -d --build` para probar la API dentro de Docker. |
-| `Dockerfile`         | **Receta de la imagen de la API** para Azure Container Apps. Etapa 1: instala, genera Prisma y compila. Etapa 2: copia solo lo necesario a una imagen limpia y la corre como usuario sin privilegios. Para la base local **no** lo necesitas.                                                                                                                |
-| `.dockerignore`      | Lo que no se copia a la imagen (`node_modules`, `.env`, `.git`...). Evita meter secretos en la imagen.                                                                                                                                                                                                                                                       |
-
-Conceptos: **imagen** = la plantilla (por ejemplo `mssql/server:2022-latest`); **contenedor** = una imagen
-encendida; **volumen** = disco del contenedor que sobrevive cuando lo apagas o lo borras.
+La base de datos local no está en este repo: el `docker-compose.yml` vive en el workspace
+(`reservation_system/`) y solo levanta SQL Server.
 
 ## `prisma/` — la base de datos
 
-| Archivo         | Para qué sirve                                                                                                                                                                                                                                        |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `schema.prisma` | **El modelo de datos**: cada `model` es una tabla (`Reservation` → `RESERVATION`). De aquí Prisma genera las tablas y el cliente tipado que usa el código.                                                                                            |
-| `seed.ts`       | Datos de ejemplo: 5 roles, 2 edificios, 4 salas, 1 laboratorio con 5 laptops y 5 usuarios demo. Se puede correr varias veces.                                                                                                                         |
-| `migrations/`   | **Aparece** tras el primer `npm run db:migrate`. Cada subcarpeta tiene un `migration.sql` con los cambios exactos de la base. **Se sube al repo**: así Azure se crea igual que tu base local (`npm run db:deploy`). No edites migraciones ya subidas. |
+| Archivo               | Para qué sirve                                                                                                                                |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schema.prisma`       | **El modelo de datos**: cada `model` es una tabla (`Reservation` → `RESERVATION`). De aquí Prisma genera las migraciones y el cliente tipado. |
+| `migrations/`         | Cada subcarpeta tiene un `migration.sql` con los cambios exactos de la base. **Se sube al repo** y no se editan las ya aplicadas.             |
+| `seed.ts`             | Datos obligatorios (también en producción): los 5 roles y el administrador inicial (`INITIAL_ADMIN_EMAIL`).                                   |
+| `seed-demo.ts`        | Datos demo: 2 edificios, 4 salas, 1 laboratorio con 5 laptops y 5 usuarios. Se puede repetir y no corre en producción.                        |
+| `seed-environment.ts` | Lee y valida las variables que usan los seeds.                                                                                                |
 
 ## `src/` — el código
 
 ### Arranque
 
-| Archivo         | Para qué sirve                                                                                                                                                                                                            |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `main.ts`       | Enciende la API: prefijo `/api/v1`, cabeceras de seguridad (helmet), CORS solo para el frontend, validación de datos, formato único de errores y Swagger en `/api/docs`. Se niega a arrancar en producción con modo demo. |
-| `app.module.ts` | Une todos los módulos. Si creas un módulo nuevo, se registra aquí.                                                                                                                                                        |
+| Archivo         | Para qué sirve                                                                                                                                        |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `main.ts`       | Enciende la API: prefijo `/api/v1`, cabeceras de seguridad (helmet), CORS de `CORS_ORIGINS`, validación de datos, formato único de errores y Swagger. |
+| `swagger.ts`    | Arma la documentación en `/api/docs`, con la versión de `package.json`.                                                                               |
+| `app.module.ts` | Une todos los módulos. Si creas un módulo nuevo, se registra aquí.                                                                                    |
 
 ### Carpetas transversales
 
-| Carpeta          | Para qué sirve                                                                                                                                                                                                                                                                                                                       |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `config/`        | `reservation-rules.ts`: reglas de reserva leídas del `.env` (franjas de 30 min, 24 h de anticipación, 48 h máximo, ventana de check-in).                                                                                                                                                                                             |
-| `common/`        | Piezas compartidas: `constants.ts` (roles, tipos y estados válidos), `filters/` (convierte cualquier error en `{statusCode, code, message}`), `current-user/` (decoradores `@CurrentUser()` y `@Public()`), `pagination.dto.ts`, `db.types.ts`, `format.ts` (fechas legibles), `job-key.ts` (protege las tareas programadas).        |
-| `prisma/`        | `PrismaService`: la conexión a la base. Reintenta si la base de Azure está despertando.                                                                                                                                                                                                                                              |
-| `auth/`          | Inicio de sesión. `auth.controller.ts` (`POST /auth/google`, `POST /auth/demo`), `google-verifier.service.ts` (verifica el token de Google), `auth.service.ts` (crea o busca el usuario y firma el JWT), `auth.guard.ts` (**guard global**: revisa el token y los roles en cada petición), `roles.decorator.ts` (`@Roles('ADMIN')`). |
-| `health/`        | `GET /health`: dice si la API y la base responden. Azure lo usa para saber si el servicio está vivo.                                                                                                                                                                                                                                 |
-| `audit/`         | Registro de auditoría (`AUDIT_LOG`): quién hizo qué y cuándo. `GET /audit` solo para ADMIN.                                                                                                                                                                                                                                          |
-| `notifications/` | Bandeja de avisos (`NOTIFICATION`). Hoy el canal es la app (IN_APP); push y e-mail quedan pendientes y se procesan con una tarea.                                                                                                                                                                                                    |
+| Carpeta          | Para qué sirve                                                                                                                                                                                                                                                                                                                                      |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config/`        | `environment.ts` valida las variables al arrancar, `app-config.ts` las agrupa en `server`, `auth`, `notifications` y `jobs`, y `AppConfigService` las expone tipadas (es global). `ReservationRulesService` entrega las reglas de reserva. **Nunca se lee `process.env` fuera de aquí.**                                                            |
+| `common/`        | Piezas compartidas: `constants.ts` (roles, tipos y estados válidos), `filters/` (convierte cualquier error en `{statusCode, code, message}`), `current-user/` (decoradores `@CurrentUser()` y `@Public()`), `guards/` (`@JobEndpoint()` protege las tareas programadas con `x-job-key`), `pagination.dto.ts`, `db.types.ts` y `format.ts` (fechas). |
+| `prisma/`        | `PrismaService`: la conexión a la base. Reintenta si la base de Azure está despertando.                                                                                                                                                                                                                                                             |
+| `auth/`          | Inicio de sesión. `auth.controller.ts` (`GET /auth/config`, `POST /auth/google`, `POST /auth/demo`), `google-verifier.service.ts`, `auth.service.ts` (crea o busca el usuario y firma el JWT), `auth.guard.ts` (**guard global** de token y roles) y `roles.decorator.ts` (`@Roles('ADMIN')`).                                                      |
+| `health/`        | `GET /health`: dice si la API y la base responden.                                                                                                                                                                                                                                                                                                  |
+| `audit/`         | Registro de auditoría (`AUDIT_LOG`): quién hizo qué y cuándo. `GET /audit` solo para ADMIN.                                                                                                                                                                                                                                                         |
+| `notifications/` | Bandeja de avisos (`NOTIFICATION`). Hoy el canal es la app (IN_APP); push y e-mail quedan pendientes y se procesan con una tarea.                                                                                                                                                                                                                   |
 
 ### Módulos de negocio
 

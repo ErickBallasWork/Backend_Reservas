@@ -72,5 +72,5 @@ export async function api(path: string, options: RequestInit = {}) {
 
 - En Google Auth Platform, la dirección del frontend debe estar en **Authorized JavaScript origins**
   (`http://localhost:3000` y la URL de Static Web Apps).
-- El backend debe tener esa misma dirección en `FRONTEND_URL` (CORS).
+- El backend debe tener esa misma dirección en `CORS_ORIGINS`.
 - La sesión dura `JWT_EXPIRES_HOURS` (8 horas por defecto); al vencer, la API responde 401.
