@@ -63,6 +63,7 @@ const DOCUMENTED_OPERATIONS: [string, string][] = [
   ['post', '/resources'],
   ['patch', '/resources/{id}'],
   ['post', '/auth/demo'],
+  ['post', '/auth/superadmin-login'],
   ['post', '/auth/device-session'],
   ['post', '/auth/refresh'],
   ['get', '/users/{userId}/devices'],

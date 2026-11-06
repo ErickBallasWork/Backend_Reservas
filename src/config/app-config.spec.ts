@@ -184,4 +184,19 @@ describe('loadAppConfig', () => {
       /INITIAL_SUPERADMIN_EMAIL/,
     );
   });
+
+  it('keeps the SUPERADMIN test login off and requires the email to turn it on', () => {
+    expect(loadAppConfig(baseEnv()).auth.superadminTestLoginEnabled).toBe(false);
+    expect(() => loadAppConfig(baseEnv({ SUPERADMIN_TEST_LOGIN_ENABLED: 'true' }))).toThrow(
+      /INITIAL_SUPERADMIN_EMAIL/,
+    );
+    expect(
+      loadAppConfig(
+        baseEnv({
+          SUPERADMIN_TEST_LOGIN_ENABLED: 'true',
+          INITIAL_SUPERADMIN_EMAIL: 'admin@tcs.com',
+        }),
+      ).auth.superadminTestLoginEnabled,
+    ).toBe(true);
+  });
 });
