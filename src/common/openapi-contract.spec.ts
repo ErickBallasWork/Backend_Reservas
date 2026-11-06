@@ -16,6 +16,10 @@ import { ResourcesController } from '../catalog/resources.controller';
 import { ResourcesService } from '../catalog/resources.service';
 import { AppConfigService } from '../config/app-config.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ManagedAssociatesController } from '../users/managed-associates.controller';
+import { ManagedAssociatesService } from '../users/managed-associates.service';
+import { UsersController } from '../users/users.controller';
+import { UsersService } from '../users/users.service';
 import { ERROR_CODES } from './error-codes';
 
 type Operation = { responses: Record<string, { content?: Record<string, unknown> }> };
@@ -34,6 +38,12 @@ const DOCUMENTED_OPERATIONS: [string, string][] = [
   ['post', '/auth/device-session'],
   ['post', '/auth/refresh'],
   ['get', '/users/{userId}/devices'],
+  ['get', '/me'],
+  ['get', '/roles'],
+  ['get', '/users'],
+  ['patch', '/users/{id}'],
+  ['get', '/users/{id}/managed-associates'],
+  ['put', '/users/{id}/managed-associates'],
   ['post', '/access-requests'],
   ['post', '/access-requests/status'],
   ['get', '/access-requests'],
@@ -59,6 +69,8 @@ describe('OpenAPI contract', () => {
         AuthController,
         AccessRequestsController,
         DevicesController,
+        UsersController,
+        ManagedAssociatesController,
         BuildingsController,
         CatalogController,
         ResourcesController,
@@ -67,6 +79,8 @@ describe('OpenAPI contract', () => {
         { provide: AuthService, useValue: {} },
         { provide: AccessRequestsService, useValue: {} },
         { provide: DevicesService, useValue: {} },
+        { provide: UsersService, useValue: {} },
+        { provide: ManagedAssociatesService, useValue: {} },
         { provide: AppConfigService, useValue: {} },
         { provide: BuildingsService, useValue: {} },
         { provide: ResourcesService, useValue: {} },

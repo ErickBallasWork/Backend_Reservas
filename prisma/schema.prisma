@@ -82,17 +82,20 @@ model User {
   lastLoginAt DateTime? @map("LastLoginAt")
   createdAt   DateTime  @default(now()) @map("CreatedAt")
 
-  roles             UserRole[]
-  reservations      Reservation[]
-  approvals         Approval[]
-  reallocations     Reallocation[]
-  sanctions         Sanction[]      @relation("SanctionUser")
-  sanctionsResolved Sanction[]      @relation("SanctionResolver")
-  notifications     Notification[]
-  auditLogs         AuditLog[]
-  checkIns          CheckIn[]
-  accessDecisions   AccessRequest[] @relation("AccessRequestDecider")
-  devices           Device[]
+  roles              UserRole[]
+  reservations       Reservation[]
+  approvals          Approval[]
+  reallocations      Reallocation[]
+  sanctions          Sanction[]         @relation("SanctionUser")
+  sanctionsResolved  Sanction[]         @relation("SanctionResolver")
+  notifications      Notification[]
+  auditLogs          AuditLog[]
+  checkIns           CheckIn[]
+  accessDecisions    AccessRequest[]    @relation("AccessRequestDecider")
+  devices            Device[]
+  managedAssociates  ManagedAssociate[] @relation("ManagerAssociates")
+  managers           ManagedAssociate[] @relation("AssociateManagers")
+  assignedAssociates ManagedAssociate[] @relation("ManagedAssociateCreator")
 
   @@map("USERS")
 }
@@ -119,6 +122,23 @@ model AccessRequest {
   @@index([status, requestedAt])
   @@index([email, status])
   @@map("ACCESS_REQUEST")
+}
+
+// Asociados a cargo de un SPOC_ADMIN o LIDER (Q-03): asignación manual, un asociado puede tener varios.
+model ManagedAssociate {
+  id          String   @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  managerId   String   @map("ManagerId") @db.UniqueIdentifier
+  associateId String   @map("AssociateId") @db.UniqueIdentifier
+  createdById String   @map("CreatedById") @db.UniqueIdentifier
+  createdAt   DateTime @default(now()) @map("CreatedAt")
+
+  manager   User @relation("ManagerAssociates", fields: [managerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  associate User @relation("AssociateManagers", fields: [associateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdBy User @relation("ManagedAssociateCreator", fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([managerId, associateId])
+  @@index([associateId])
+  @@map("MANAGED_ASSOCIATE")
 }
 
 // Navegador aprobado de un usuario. Guarda solo hashes del refresh token, que rota en cada uso.

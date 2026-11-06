@@ -1,12 +1,34 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
-import { USER_WITH_ROLES } from '../auth/current-user.mapper';
+import { MANAGER_ROLES, type Role } from '../common/constants';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserDto } from './dto/user.dto';
 import { RoleRowsService } from './role-rows.service';
 import { assertCanManageRoles, removesSuperadminAccess } from './role-assignment.policy';
+
+const USER_WITH_BUILDINGS = {
+  roles: { include: { role: true, building: { select: { name: true } } } },
+} satisfies Prisma.UserInclude;
+
+type UserWithBuildings = Prisma.UserGetPayload<{ include: typeof USER_WITH_BUILDINGS }>;
+
+function toUserResponse(user: UserWithBuildings) {
+  return {
+    id: user.id,
+    email: user.email,
+    fullName: user.fullName,
+    department: user.department,
+    isActive: user.isActive,
+    lastLoginAt: user.lastLoginAt,
+    roles: user.roles.map((r) => ({
+      role: r.role.name as Role,
+      buildingId: r.buildingId,
+      building: r.building?.name ?? null,
+    })),
+  };
+}
 
 @Injectable()
 export class UsersService {
@@ -24,28 +46,17 @@ export class UsersService {
     return { ...user, activeSanction };
   }
 
-  listRoles() {
-    return this.prisma.role.findMany({ orderBy: { id: 'asc' } });
+  async listRoles() {
+    const roles = await this.prisma.role.findMany({ orderBy: { id: 'asc' } });
+    return roles.map((role) => ({ id: role.id, name: role.name as Role }));
   }
 
   async list() {
     const users = await this.prisma.user.findMany({
-      include: { roles: { include: { role: true, building: { select: { name: true } } } } },
+      include: USER_WITH_BUILDINGS,
       orderBy: { fullName: 'asc' },
     });
-    return users.map((u) => ({
-      id: u.id,
-      email: u.email,
-      fullName: u.fullName,
-      department: u.department,
-      isActive: u.isActive,
-      lastLoginAt: u.lastLoginAt,
-      roles: u.roles.map((r) => ({
-        role: r.role.name,
-        buildingId: r.buildingId,
-        building: r.building?.name ?? null,
-      })),
-    }));
+    return users.map(toUserResponse);
   }
 
   async update(admin: CurrentUserData, id: string, dto: UpdateUserDto) {
@@ -72,6 +83,9 @@ export class UsersService {
       if (dto.isActive !== undefined) data.isActive = dto.isActive;
       if (dto.department !== undefined) data.department = dto.department.trim();
       await tx.user.update({ where: { id }, data });
+      if (requestedRoles && !requestedRoles.some((role) => MANAGER_ROLES.includes(role))) {
+        await tx.managedAssociate.deleteMany({ where: { managerId: id } });
+      }
       if (dto.isActive === false) {
         await tx.device.updateMany({
           where: { userId: id, revokedAt: null },
@@ -92,7 +106,7 @@ export class UsersService {
         tx,
       );
     });
-    return this.get(id);
+    return toUserResponse(await this.get(id));
   }
 
   private async assertKeepsASuperadmin(
@@ -113,7 +127,7 @@ export class UsersService {
   }
 
   private async get(id: string) {
-    const user = await this.prisma.user.findUnique({ where: { id }, include: USER_WITH_ROLES });
+    const user = await this.prisma.user.findUnique({ where: { id }, include: USER_WITH_BUILDINGS });
     if (!user) {
       throw new NotFoundException({
         code: 'USER_NOT_FOUND',

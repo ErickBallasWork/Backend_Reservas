@@ -9,6 +9,7 @@ export const ROLES = [
 export type Role = (typeof ROLES)[number];
 
 export const SUPERADMIN_ROLE: Role = 'SUPERADMIN';
+export const MANAGER_ROLES: readonly string[] = ['SPOC_ADMIN', 'LIDER'];
 export const PRIVILEGED_ROLES: readonly string[] = ['ADMIN', SUPERADMIN_ROLE];
 
 export const RESOURCE_TYPES = ['MEETING_ROOM', 'AI_LAB', 'LAPTOP'] as const;
