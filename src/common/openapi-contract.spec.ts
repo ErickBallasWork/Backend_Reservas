@@ -1,0 +1,108 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import type { INestApplication } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import { DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
+import { AuthController } from '../auth/auth.controller';
+import { AuthService } from '../auth/auth.service';
+import { BuildingsController } from '../catalog/buildings.controller';
+import { BuildingsService } from '../catalog/buildings.service';
+import { CatalogController } from '../catalog/catalog.controller';
+import { ResourcesController } from '../catalog/resources.controller';
+import { ResourcesService } from '../catalog/resources.service';
+import { AppConfigService } from '../config/app-config.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { ERROR_CODES } from './error-codes';
+
+type Operation = { responses: Record<string, { content?: Record<string, unknown> }> };
+
+const DOCUMENTED_OPERATIONS: [string, string][] = [
+  ['get', '/catalog/tree'],
+  ['get', '/buildings'],
+  ['get', '/buildings/{id}'],
+  ['post', '/buildings'],
+  ['patch', '/buildings/{id}'],
+  ['get', '/resources'],
+  ['get', '/resources/{id}'],
+  ['post', '/resources'],
+  ['patch', '/resources/{id}'],
+  ['get', '/auth/config'],
+  ['post', '/auth/google'],
+  ['post', '/auth/demo'],
+];
+
+function sourceFiles(dir: string): string[] {
+  return readdirSync(dir).flatMap((entry) => {
+    const path = join(dir, entry);
+    if (statSync(path).isDirectory()) return sourceFiles(path);
+    return path.endsWith('.ts') && !path.endsWith('.spec.ts') ? [path] : [];
+  });
+}
+
+describe('OpenAPI contract', () => {
+  let app: INestApplication;
+  let document: OpenAPIObject;
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({
+      controllers: [AuthController, BuildingsController, CatalogController, ResourcesController],
+      providers: [
+        { provide: AuthService, useValue: {} },
+        { provide: AppConfigService, useValue: {} },
+        { provide: BuildingsService, useValue: {} },
+        { provide: ResourcesService, useValue: {} },
+        { provide: PrismaService, useValue: {} },
+      ],
+    }).compile();
+    app = moduleRef.createNestApplication();
+    await app.init();
+    document = SwaggerModule.createDocument(app, new DocumentBuilder().build());
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it.each(DOCUMENTED_OPERATIONS)('declares a typed success response for %s %s', (method, path) => {
+    const operation = (document.paths[path] as Record<string, Operation>)[method];
+    const success = Object.entries(operation.responses).find(([status]) => status.startsWith('2'));
+
+    expect(success?.[1].content?.['application/json']).toBeDefined();
+  });
+
+  it.each(['/catalog/tree', '/buildings/{id}', '/resources/{id}'])(
+    'declares the error schema for GET %s',
+    (path) => {
+      const operation = (document.paths[path] as Record<string, Operation>).get;
+
+      expect(Object.keys(operation.responses)).toContain('401');
+    },
+  );
+
+  it('publishes the domain enums by name', () => {
+    const schemas = document.components?.schemas ?? {};
+    const serialize = (name: string) => JSON.stringify(schemas[name]);
+
+    expect(serialize('ResourceResponseDto')).toContain('#/components/schemas/ResourceType');
+    expect(serialize('CurrentUserResponseDto')).toContain('#/components/schemas/Role');
+    expect(serialize('ApiErrorResponseDto')).toContain('#/components/schemas/ErrorCode');
+    expect(schemas.ResourceType).toMatchObject({ enum: ['MEETING_ROOM', 'AI_LAB', 'LAPTOP'] });
+  });
+});
+
+describe('error code registry', () => {
+  const sources = sourceFiles(join(__dirname, '..')).map((file) => readFileSync(file, 'utf8'));
+  const usedCodes = new Set(
+    sources.flatMap((text) =>
+      [...text.matchAll(/(?:code:\s*|RuleViolation\(\s*)'([A-Z_]+)'/g)].map((match) => match[1]),
+    ),
+  );
+
+  it('contains every code thrown by the backend', () => {
+    const missing = [...usedCodes].filter(
+      (code) => !(ERROR_CODES as readonly string[]).includes(code),
+    );
+
+    expect(missing).toEqual([]);
+  });
+});
