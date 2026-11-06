@@ -1,5 +1,7 @@
 import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../common/current-user/current-user.decorator';
+import { CurrentUserData } from '../common/current-user/current-user.types';
 import { AvailabilityService } from './availability.service';
 import { RangeQueryDto, SearchAvailabilityQueryDto } from './dto/availability.dto';
 
@@ -15,8 +17,17 @@ export class AvailabilityController {
   }
 
   @Get('resources/:id')
-  @ApiOperation({ summary: 'Franjas ocupadas de una sala o laboratorio y sus laptops (HU-06)' })
-  resource(@Param('id', ParseUUIDPipe) id: string, @Query() query: RangeQueryDto) {
-    return this.availability.resource(id, query);
+  @ApiOperation({
+    summary: 'Franjas ocupadas de una sala o laboratorio y sus laptops (HU-06)',
+    description:
+      'reservations dice qué reserva ocupa cada tramo, si es mía y si se puede pedir en cesión ' +
+      '(POST /reservations/{reservationId}/transfer-requests).',
+  })
+  resource(
+    @CurrentUser() user: CurrentUserData,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: RangeQueryDto,
+  ) {
+    return this.availability.resource(id, query, user.id);
   }
 }

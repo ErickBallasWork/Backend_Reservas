@@ -1,11 +1,23 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { BLOCKING_STATUSES, Status } from '../common/constants';
 import { reservationRules } from '../config/reservation-rules';
 import { PrismaService } from '../prisma/prisma.service';
 import { chunk } from '../reservations/time-rules';
 import { RangeQueryDto, SearchAvailabilityQueryDto } from './dto/availability.dto';
 
 const MAX_RANGE_DAYS = 14;
+
+// Una reserva que ocupa parte del rango consultado
+export interface ReservationBlock {
+  reservationId: string;
+  startDateTime: string;
+  endDateTime: string;
+  // Es mía
+  mine: boolean;
+  // Se puede pedir en cesión: es de otra persona, está confirmada y no ha empezado
+  transferable: boolean;
+}
 
 @Injectable()
 export class AvailabilityService {
@@ -47,7 +59,7 @@ export class AvailabilityService {
    * laptop. Si el laboratorio tiene una franja ocupada, está reservado completo y sus laptops se
    * muestran bloqueadas en esa franja.
    */
-  async resource(resourceId: string, query: RangeQueryDto) {
+  async resource(resourceId: string, query: RangeQueryDto, userId: string) {
     const { from, to } = this.parseRange(query);
     const resource = await this.prisma.resource.findUnique({
       where: { id: resourceId },
@@ -56,7 +68,9 @@ export class AvailabilityService {
     if (!resource) {
       throw new NotFoundException({ code: 'RESOURCE_NOT_FOUND', message: `No existe el recurso ${resourceId}` });
     }
-    const busy = await this.busyByResource([resource.id, ...resource.children.map((c) => c.id)], from, to);
+    const ids = [resource.id, ...resource.children.map((c) => c.id)];
+    const busy = await this.busyByResource(ids, from, to);
+    const blocks = await this.reservationsByResource(ids, from, to, userId);
     return {
       resourceId: resource.id,
       name: resource.name,
@@ -65,12 +79,48 @@ export class AvailabilityService {
       from: from.toISOString(),
       to: to.toISOString(),
       busySlots: busy.get(resource.id) ?? [],
+      // Qué reserva ocupa cada tramo, para poder pedirla en cesión (sin datos de su dueño)
+      reservations: blocks.get(resource.id) ?? [],
       laptops: resource.children.map((l) => ({
         id: l.id,
         name: l.name,
         busySlots: busy.get(l.id) ?? [],
+        reservations: blocks.get(l.id) ?? [],
       })),
     };
+  }
+  /**
+   * Reservas que ocupan el rango, por recurso. No incluye quién es el dueño (privacidad):
+   * solo si es mía y si se puede pedir en cesión. Una laptop ocupada porque reservaron el
+   * laboratorio completo no tiene reserva propia: esa reserva aparece en el laboratorio.
+   */
+  private async reservationsByResource(resourceIds: string[], from: Date, to: Date, userId: string) {
+    const result = new Map<string, ReservationBlock[]>();
+    const now = Date.now();
+    for (const ids of chunk(resourceIds, 500)) {
+      const rows = await this.prisma.reservation.findMany({
+        where: {
+          resourceId: { in: ids },
+          status: { in: BLOCKING_STATUSES },
+          startDateTime: { lt: to },
+          endDateTime: { gt: from },
+        },
+        select: { id: true, resourceId: true, userId: true, status: true, startDateTime: true, endDateTime: true },
+        orderBy: { startDateTime: 'asc' },
+      });
+      for (const r of rows) {
+        const list = result.get(r.resourceId) ?? [];
+        list.push({
+          reservationId: r.id,
+          startDateTime: r.startDateTime.toISOString(),
+          endDateTime: r.endDateTime.toISOString(),
+          mine: r.userId === userId,
+          transferable: r.userId !== userId && r.status === Status.CONFIRMED && r.startDateTime.getTime() > now,
+        });
+        result.set(r.resourceId, list);
+      }
+    }
+    return result;
   }
 
   /** HU-06: salas y laboratorios libres en todo el rango (filtros: edificio, tipo, capacidad). */
