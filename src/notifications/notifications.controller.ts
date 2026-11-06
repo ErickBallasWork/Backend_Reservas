@@ -2,6 +2,8 @@ import { Controller, Get, Param, ParseUUIDPipe, Patch, Query } from '@nestjs/com
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../common/current-user/current-user.decorator';
 import { CurrentUserData } from '../common/current-user/current-user.types';
+import { Throttle } from '@nestjs/throttler';
+import { limitFor } from '../throttling/rate-limits';
 import { NotificationsQueryDto } from './dto/notifications-query.dto';
 import {
   MarkAllReadResponseDto,
@@ -17,6 +19,7 @@ export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
 
   @Get()
+  @Throttle(limitFor('notificationsPolling'))
   @ApiOkResponse({ type: NotificationPageResponseDto })
   @ApiOperation({ summary: 'Mi bandeja de avisos' })
   listMine(@CurrentUser() user: CurrentUserData, @Query() query: NotificationsQueryDto) {
@@ -24,6 +27,7 @@ export class NotificationsController {
   }
 
   @Get('unread-count')
+  @Throttle(limitFor('notificationsPolling'))
   @ApiOkResponse({ type: UnreadCountResponseDto })
   @ApiOperation({ summary: 'Número de avisos sin leer (para el contador)' })
   unreadCount(@CurrentUser() user: CurrentUserData) {

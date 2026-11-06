@@ -40,7 +40,10 @@ function build() {
     $transaction: jest.fn((run: (client: typeof tx) => unknown) => run(tx)),
   };
   const audit = { log: jest.fn() };
-  const notifications = { notify: jest.fn() };
+  const notifications = {
+    notify: jest.fn(),
+    resolveForAccessRequest: jest.fn().mockResolvedValue(undefined),
+  };
   const roleRows = { resolve: jest.fn().mockResolvedValue([{ roleId: 1, buildingId: null }]) };
   const service = new AccessRequestsService(
     prisma as unknown as PrismaService,
@@ -91,6 +94,10 @@ describe('AccessRequestsService.create', () => {
       }) as unknown,
     });
     expect(notifications.notify).toHaveBeenCalledTimes(1);
+    expect(notifications.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'ACCESS_REQUEST', accessRequestId: 'req-id' }),
+      expect.anything(),
+    );
     expect(audit.log).toHaveBeenCalledTimes(1);
   });
 
@@ -206,6 +213,16 @@ describe('AccessRequestsService.approve', () => {
     await service.approve(ACTOR, 'req-id', {});
 
     expect(user.create).not.toHaveBeenCalled();
+  });
+
+  it.each(['approve', 'reject'] as const)('clears the superadmin notices on %s', async (action) => {
+    const { service, accessRequest, notifications } = build();
+    accessRequest.findUnique.mockResolvedValue(pending);
+
+    if (action === 'approve') await service.approve(ACTOR, 'req-id', {});
+    else await service.reject(ACTOR, 'req-id', { comment: 'No corresponde' });
+
+    expect(notifications.resolveForAccessRequest).toHaveBeenCalledWith('req-id', expect.anything());
   });
 
   it('refuses to approve a device of a deactivated user', async () => {

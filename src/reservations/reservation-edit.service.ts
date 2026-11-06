@@ -115,6 +115,7 @@ export class ReservationEditService {
             startDateTime: plan.next.startDateTime,
             endDateTime: plan.next.endDateTime,
             status,
+            ...(plan.slotChanged ? { reminderSentAt: null } : {}),
           },
         });
         if (updated.count === 0) {
@@ -128,10 +129,15 @@ export class ReservationEditService {
           await insertSlots(tx, current.id, blockedIds, slotStarts, slotMinutes);
         }
 
+        if (plan.slotChanged) {
+          await this.notifications.resolveForReservation(current.id, ['RESERVATION_REMINDER'], tx);
+        }
+
         const goesToApproval = status === Status.PENDING_APPROVAL && current.status !== status;
         await this.notifications.notify(
           {
             userId: current.userId,
+            reservationId: current.id,
             type: goesToApproval ? 'RESERVATION_PENDING' : 'RESERVATION_UPDATED',
             title: goesToApproval ? 'Reserva pendiente de aprobación' : 'Reserva actualizada',
             message: goesToApproval
@@ -145,6 +151,7 @@ export class ReservationEditService {
             requesterId: user.id,
             requesterName: user.fullName,
             label,
+            reservationId: current.id,
           });
         }
         await this.audit.log(

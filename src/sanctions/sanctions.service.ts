@@ -117,10 +117,16 @@ export class SanctionsService {
             },
           });
         }
+        await this.notifications.resolveForReservation(
+          reservation.id,
+          ['RESERVATION_REMINDER'],
+          tx,
+        );
         await this.notifications.notify(
           {
             userId: reservation.userId,
-            type: 'NO_SHOW_SANCTION',
+            reservationId: reservation.id,
+            type: sanctioned ? 'NO_SHOW_SANCTION' : 'NO_SHOW_NO_SANCTION',
             title: 'Reserva marcada como inasistencia',
             message: sanctioned
               ? `No registraste el uso de ${reservation.resource.name}. No podrás reservar hasta que un administrador regularice la sanción.`
@@ -161,6 +167,7 @@ export class SanctionsService {
         await this.notifications.notify(
           {
             userId: reservation.userId,
+            reservationId: reservation.id,
             type: 'TRAINING_EXPIRED',
             title: 'Solicitud de entrenamiento vencida',
             message: `Tu solicitud para ${reservation.resource.name} no fue aprobada antes de su inicio.`,

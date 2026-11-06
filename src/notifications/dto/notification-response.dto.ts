@@ -19,6 +19,19 @@ export class NotificationResponseDto {
 
   @ApiProperty({ format: 'date-time' })
   createdAt!: Date;
+
+  @ApiProperty({ format: 'uuid', nullable: true, description: 'Reservation the notice is about' })
+  reservationId!: string | null;
+
+  @ApiProperty({ format: 'date-time', nullable: true, description: 'Start of the related event' })
+  eventAt!: Date | null;
+
+  @ApiProperty({
+    format: 'date-time',
+    nullable: true,
+    description: 'The notice stops being shown after this moment',
+  })
+  expiresAt!: Date | null;
 }
 
 export class NotificationPageResponseDto {

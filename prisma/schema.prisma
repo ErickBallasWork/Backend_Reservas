@@ -218,25 +218,27 @@ model UserRole {
 // ---------------- Reservas ----------------
 
 model Reservation {
-  id              String   @id @default(uuid()) @map("Id") @db.UniqueIdentifier
-  userId          String   @map("UserId") @db.UniqueIdentifier
+  id              String    @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  userId          String    @map("UserId") @db.UniqueIdentifier
   // Sala, laboratorio (reserva completa) o laptop
-  resourceId      String   @map("ResourceId") @db.UniqueIdentifier
+  resourceId      String    @map("ResourceId") @db.UniqueIdentifier
   // ROOM | FULL_LAB | LAPTOP
-  reservationType String   @map("ReservationType") @db.NVarChar(20)
+  reservationType String    @map("ReservationType") @db.NVarChar(20)
   // Motivo: INTERNAL_MEETING | CLIENT_MEETING | TRAINING
-  purpose         String   @map("Purpose") @db.NVarChar(30)
+  purpose         String    @map("Purpose") @db.NVarChar(30)
   // Detalle o justificación del motivo (RF-07)
-  justification   String   @map("Justification") @db.NVarChar(1000)
-  attendees       Int?     @map("Attendees")
-  seriesId        String?  @map("SeriesId") @db.UniqueIdentifier
-  occurrenceIndex Int?     @map("OccurrenceIndex")
-  startDateTime   DateTime @map("StartDateTime")
-  endDateTime     DateTime @map("EndDateTime")
+  justification   String    @map("Justification") @db.NVarChar(1000)
+  attendees       Int?      @map("Attendees")
+  seriesId        String?   @map("SeriesId") @db.UniqueIdentifier
+  occurrenceIndex Int?      @map("OccurrenceIndex")
+  startDateTime   DateTime  @map("StartDateTime")
+  endDateTime     DateTime  @map("EndDateTime")
   // PENDING_APPROVAL | CONFIRMED | REJECTED | CANCELLED | CHECKED_IN | NO_SHOW
-  status          String   @map("Status") @db.NVarChar(20)
-  createdAt       DateTime @default(now()) @map("CreatedAt")
-  updatedAt       DateTime @updatedAt @map("UpdatedAt")
+  status          String    @map("Status") @db.NVarChar(20)
+  // Marca que ya salió el recordatorio previo al inicio; la guarda evita duplicados entre instancias
+  reminderSentAt  DateTime? @map("ReminderSentAt")
+  createdAt       DateTime  @default(now()) @map("CreatedAt")
+  updatedAt       DateTime  @updatedAt @map("UpdatedAt")
 
   user          User               @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   resource      Resource           @relation(fields: [resourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -376,24 +378,33 @@ model Sanction {
 // Un aviso por canal. IN_APP es la bandeja del sistema (canal por defecto); PUSH y EMAIL
 // quedan como envíos pendientes (Status = PENDING) hasta que una tarea los procese.
 model Notification {
-  id        String    @id @default(uuid()) @map("Id") @db.UniqueIdentifier
-  userId    String    @map("UserId") @db.UniqueIdentifier
+  id              String    @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  userId          String    @map("UserId") @db.UniqueIdentifier
   // IN_APP | PUSH | EMAIL
-  channel   String    @default("IN_APP") @map("Channel") @db.NVarChar(10)
-  type      String    @map("Type") @db.NVarChar(40)
-  title     String    @map("Title") @db.NVarChar(200)
-  message   String    @map("Message") @db.NVarChar(1000)
-  isRead    Boolean   @default(false) @map("IsRead")
+  channel         String    @default("IN_APP") @map("Channel") @db.NVarChar(10)
+  type            String    @map("Type") @db.NVarChar(40)
+  title           String    @map("Title") @db.NVarChar(200)
+  message         String    @map("Message") @db.NVarChar(1000)
+  isRead          Boolean   @default(false) @map("IsRead")
+  // Referencias blandas para la acción de la tarjeta y para resolver el aviso solo
+  reservationId   String?   @map("ReservationId") @db.UniqueIdentifier
+  accessRequestId String?   @map("AccessRequestId") @db.UniqueIdentifier
+  // Momento del hecho (inicio de la reserva) y fin de la vigencia del aviso
+  eventAt         DateTime? @map("EventAt")
+  expiresAt       DateTime? @map("ExpiresAt")
   // PENDING | SENT | FAILED
-  status    String    @default("SENT") @map("Status") @db.NVarChar(10)
-  attempts  Int       @default(0) @map("Attempts")
-  sentAt    DateTime? @map("SentAt")
-  createdAt DateTime  @default(now()) @map("CreatedAt")
+  status          String    @default("SENT") @map("Status") @db.NVarChar(10)
+  attempts        Int       @default(0) @map("Attempts")
+  sentAt          DateTime? @map("SentAt")
+  createdAt       DateTime  @default(now()) @map("CreatedAt")
 
   user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([userId, channel, isRead])
+  @@index([userId, channel, createdAt])
   @@index([channel, status])
+  @@index([reservationId])
+  @@index([accessRequestId])
   @@map("NOTIFICATION")
 }
 

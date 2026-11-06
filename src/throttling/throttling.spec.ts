@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import { Throttle, ThrottlerModule } from '@nestjs/throttler';
 import { AccessRequestsController } from '../access-requests/access-requests.controller';
 import { AuthController } from '../auth/auth.controller';
+import { NotificationsController } from '../notifications/notifications.controller';
 import { AllExceptionsFilter } from '../common/filters/all-exceptions.filter';
 import { AppThrottlerGuard } from './app-throttler.guard';
 import { RATE_LIMITS } from './rate-limits';
@@ -68,8 +69,14 @@ describe('rate limits on public endpoints', () => {
     [AuthController.prototype, 'refresh', RATE_LIMITS.refresh.limit],
     [AuthController.prototype, 'logout', RATE_LIMITS.logout.limit],
     [AuthController.prototype, 'demo', RATE_LIMITS.demoLogin.limit],
+    [NotificationsController.prototype, 'listMine', RATE_LIMITS.notificationsPolling.limit],
+    [NotificationsController.prototype, 'unreadCount', RATE_LIMITS.notificationsPolling.limit],
   ])('limits %p.%s', (prototype, method, expected) => {
     expect(limitOf(prototype, method)).toBe(expected);
+  });
+
+  it('lets a shared office address poll notifications beyond the global limit', () => {
+    expect(RATE_LIMITS.notificationsPolling.limit).toBeGreaterThan(RATE_LIMITS.global.limit);
   });
 
   it('keeps the access request creation stricter than the global limit', () => {

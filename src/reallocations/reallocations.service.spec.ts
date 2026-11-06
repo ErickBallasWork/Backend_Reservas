@@ -78,6 +78,7 @@ function build(found: unknown = reservation(), target: unknown = targetRoom) {
   };
   const notifications = {
     notify: jest.fn<Promise<void>, [NotifyInput, unknown]>().mockResolvedValue(undefined),
+    resolveForReservation: jest.fn().mockResolvedValue(undefined),
   };
   const audit = {
     log: jest.fn<Promise<void>, [AuditEntry, unknown]>().mockResolvedValue(undefined),

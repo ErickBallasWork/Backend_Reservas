@@ -33,19 +33,20 @@ function build(found: unknown = reservation(), updatedCount = 1) {
     $transaction: jest.fn((work: (client: typeof tx) => Promise<unknown>) => work(tx)),
   };
   const audit = { log: jest.fn().mockResolvedValue(undefined) };
+  const notifications = { resolveForReservation: jest.fn().mockResolvedValue(undefined) };
   const rules = { current: () => DEFAULT_RESERVATION_RULES };
   const service = new ReservationsService(
     prisma as unknown as PrismaService,
     {} as never,
     {} as never,
-    {} as never,
+    notifications as never,
     audit as unknown as AuditService,
     rules,
     {} as never,
     {} as never,
   );
   jest.spyOn(service, 'getById').mockResolvedValue({} as never);
-  return { service, tx, audit };
+  return { service, tx, audit, notifications };
 }
 
 describe('ReservationsService.checkIn', () => {
@@ -59,8 +60,13 @@ describe('ReservationsService.checkIn', () => {
 
   it('registers the usage inside the window', async () => {
     setNow('2026-11-11T15:10:00Z');
-    const { service, tx, audit } = build();
+    const { service, tx, audit, notifications } = build();
     await service.checkIn(owner, 'res-1');
+    expect(notifications.resolveForReservation).toHaveBeenCalledWith(
+      'res-1',
+      ['RESERVATION_REMINDER'],
+      tx,
+    );
     expect(tx.reservation.updateMany).toHaveBeenCalledWith({
       where: { id: 'res-1', status: 'CONFIRMED' },
       data: { status: 'CHECKED_IN' },

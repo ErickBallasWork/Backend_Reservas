@@ -11,6 +11,10 @@ export interface NotifyInput {
   type: NotificationType;
   title: string;
   message: string;
+  reservationId?: string;
+  accessRequestId?: string;
+  eventAt?: Date;
+  expiresAt?: Date;
 }
 
 const RESPONSE_FIELDS = {
@@ -20,7 +24,18 @@ const RESPONSE_FIELDS = {
   message: true,
   isRead: true,
   createdAt: true,
+  reservationId: true,
+  eventAt: true,
+  expiresAt: true,
 } satisfies Prisma.NotificationSelect;
+
+function visibleTo(userId: string, now: Date): Prisma.NotificationWhereInput {
+  return {
+    userId,
+    channel: 'IN_APP',
+    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+  };
+}
 
 @Injectable()
 export class NotificationsService {
@@ -34,7 +49,7 @@ export class NotificationsService {
   }
 
   async listMine(userId: string, query: NotificationsQueryDto) {
-    const mine: Prisma.NotificationWhereInput = { userId, channel: 'IN_APP' };
+    const mine = visibleTo(userId, new Date());
     const where = query.unreadOnly ? { ...mine, isRead: false } : mine;
     const [items, total, unread] = await Promise.all([
       this.prisma.notification.findMany({
@@ -51,7 +66,7 @@ export class NotificationsService {
 
   async unreadCount(userId: string) {
     const unread = await this.prisma.notification.count({
-      where: { userId, channel: 'IN_APP', isRead: false },
+      where: { ...visibleTo(userId, new Date()), isRead: false },
     });
     return { unread };
   }
@@ -78,9 +93,27 @@ export class NotificationsService {
 
   async markAllRead(userId: string) {
     const result = await this.prisma.notification.updateMany({
-      where: { userId, channel: 'IN_APP', isRead: false },
+      where: { ...visibleTo(userId, new Date()), isRead: false },
       data: { isRead: true },
     });
     return { updated: result.count };
+  }
+
+  async resolveForReservation(
+    reservationId: string,
+    types: NotificationType[],
+    db: Db,
+  ): Promise<void> {
+    await db.notification.updateMany({
+      where: { reservationId, type: { in: types }, channel: 'IN_APP', isRead: false },
+      data: { isRead: true },
+    });
+  }
+
+  async resolveForAccessRequest(accessRequestId: string, db: Db): Promise<void> {
+    await db.notification.updateMany({
+      where: { accessRequestId, channel: 'IN_APP', isRead: false },
+      data: { isRead: true },
+    });
   }
 }

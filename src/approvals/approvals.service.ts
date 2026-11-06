@@ -157,6 +157,11 @@ export class ApprovalsService {
     if (!approve) {
       await tx.reservationSlot.deleteMany({ where: { reservationId: reservation.id } });
     }
+    await this.notifications.resolveForReservation(
+      reservation.id,
+      ['APPROVAL_REQUESTED', 'APPROVAL_REALLOCATED'],
+      tx,
+    );
     await this.audit.log(
       {
         userId: approver.id,
@@ -186,6 +191,7 @@ export class ApprovalsService {
     return this.notifications.notify(
       {
         userId: reservation.userId,
+        reservationId: count > 1 ? undefined : reservation.id,
         type: approve ? 'RESERVATION_APPROVED' : 'RESERVATION_REJECTED',
         title: approve ? 'Entrenamiento aprobado' : 'Entrenamiento rechazado',
         message: `${subject}.${reason}`,

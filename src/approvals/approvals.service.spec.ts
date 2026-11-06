@@ -52,7 +52,10 @@ function build(options: { assigned?: string[]; updatedCounts?: number[] } = {}) 
     reservationSeries: { findUnique: jest.fn().mockResolvedValue({ id: 's1' }) },
     $transaction: jest.fn((work: (client: typeof tx) => unknown) => work(tx)),
   };
-  const notifications = { notify: jest.fn() };
+  const notifications = {
+    notify: jest.fn(),
+    resolveForReservation: jest.fn().mockResolvedValue(undefined),
+  };
   const audit = { log: jest.fn() };
   const routing = {
     assignedLeaderIds: jest.fn().mockResolvedValue(options.assigned ?? ['leader']),
@@ -84,7 +87,16 @@ describe('ApprovalsService.decide', () => {
     });
     expect(tx.reservationSlot.deleteMany).not.toHaveBeenCalled();
     expect(notifications.notify).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'owner', type: 'RESERVATION_APPROVED' }),
+      expect.objectContaining({
+        userId: 'owner',
+        type: 'RESERVATION_APPROVED',
+        reservationId: 'r1',
+      }),
+      tx,
+    );
+    expect(notifications.resolveForReservation).toHaveBeenCalledWith(
+      'r1',
+      ['APPROVAL_REQUESTED', 'APPROVAL_REALLOCATED'],
       tx,
     );
   });

@@ -8,6 +8,7 @@ export interface ApprovalRequest {
   requesterName: string;
   label: string;
   count?: number;
+  reservationId?: string;
 }
 
 @Injectable()
@@ -26,7 +27,13 @@ export class LeaderNotifier {
     const recipients = await this.routing.recipientIds(request.requesterId, tx);
     for (const userId of recipients) {
       await this.notifications.notify(
-        { userId, type: 'APPROVAL_REQUESTED', title: 'Entrenamiento por aprobar', message },
+        {
+          userId,
+          type: 'APPROVAL_REQUESTED',
+          title: 'Entrenamiento por aprobar',
+          message,
+          reservationId: request.reservationId,
+        },
         tx,
       );
     }
@@ -37,7 +44,13 @@ export class LeaderNotifier {
     const recipients = await this.routing.recipientIds(request.requesterId, tx);
     for (const userId of recipients) {
       await this.notifications.notify(
-        { userId, type: 'APPROVAL_REALLOCATED', title: 'Entrenamiento reasignado', message },
+        {
+          userId,
+          type: 'APPROVAL_REALLOCATED',
+          title: 'Entrenamiento reasignado',
+          message,
+          reservationId: request.reservationId,
+        },
         tx,
       );
     }

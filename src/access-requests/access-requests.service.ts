@@ -78,7 +78,7 @@ export class AccessRequestsService {
           },
           tx,
         );
-        await this.notifySuperadmins(created.fullName, email, tx);
+        await this.notifySuperadmins(created.id, created.fullName, email, tx);
         return created;
       });
       return { requestId: request.id };
@@ -256,9 +256,15 @@ export class AccessRequestsService {
       },
     });
     if (count === 0) throw this.alreadyResolved();
+    await this.notifications.resolveForAccessRequest(id, tx);
   }
 
-  private async notifySuperadmins(fullName: string, email: string, db: Db): Promise<void> {
+  private async notifySuperadmins(
+    accessRequestId: string,
+    fullName: string,
+    email: string,
+    db: Db,
+  ): Promise<void> {
     const superadmins = await db.user.findMany({
       where: { isActive: true, roles: { some: { role: { name: SUPERADMIN_ROLE } } } },
       select: { id: true },
@@ -267,6 +273,7 @@ export class AccessRequestsService {
       await this.notifications.notify(
         {
           userId: id,
+          accessRequestId,
           type: 'ACCESS_REQUEST',
           title: 'Nueva solicitud de acceso',
           message: `${fullName} (${email}) pidió acceso al sistema.`,

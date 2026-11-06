@@ -142,6 +142,7 @@ export class ReservationsService {
           await this.notifications.notify(
             {
               userId: user.id,
+              reservationId: created.id,
               type: status === Status.CONFIRMED ? 'RESERVATION_CONFIRMED' : 'RESERVATION_PENDING',
               title:
                 status === Status.CONFIRMED
@@ -160,6 +161,7 @@ export class ReservationsService {
               requesterId: user.id,
               requesterName: user.fullName,
               label,
+              reservationId: created.id,
             });
           }
 
@@ -303,6 +305,7 @@ export class ReservationsService {
     await this.prisma.$transaction(async (tx) => {
       await tx.reservationSlot.deleteMany({ where: { reservationId: id } });
       await tx.reservation.update({ where: { id }, data: { status: Status.CANCELLED } });
+      await this.notifications.resolveForReservation(id, ['RESERVATION_REMINDER'], tx);
       await this.audit.log(
         { userId: user.id, action: 'RESERVATION_CANCELLED', entity: 'Reservation', entityId: id },
         tx,
@@ -347,6 +350,7 @@ export class ReservationsService {
       await tx.checkIn.create({
         data: { reservationId: id, userId: user.id, method: 'BUTTON' },
       });
+      await this.notifications.resolveForReservation(id, ['RESERVATION_REMINDER'], tx);
       await this.audit.log(
         { userId: user.id, action: 'RESERVATION_CHECKED_IN', entity: 'Reservation', entityId: id },
         tx,

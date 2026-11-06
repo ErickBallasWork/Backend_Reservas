@@ -50,6 +50,7 @@ function build(options: BuildOptions = {}) {
   };
   const notifications = {
     notify: jest.fn<Promise<void>, [NotifyInput, unknown]>().mockResolvedValue(undefined),
+    resolveForReservation: jest.fn().mockResolvedValue(undefined),
   };
   const audit = {
     log: jest.fn<Promise<void>, [AuditEntry, unknown]>().mockResolvedValue(undefined),
@@ -147,6 +148,7 @@ describe('SanctionsService.processNoShows', () => {
     expect(tx.reservation.updateMany).toHaveBeenCalled();
     expect(tx.sanction.create).not.toHaveBeenCalled();
     const [notice] = notifications.notify.mock.calls[0];
+    expect(notice.type).toBe('NO_SHOW_NO_SANCTION');
     expect(notice.message).toContain('sin sanción');
     expect(audit.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'NO_SHOW_MARKED', details: { sanctioned: false } }),

@@ -124,7 +124,14 @@ export class ReallocationsService {
               startDateTime: reservation.startDateTime,
               endDateTime: reservation.endDateTime,
             },
-            data: { resourceId: room.id, startDateTime: start, endDateTime: end },
+            data: {
+              resourceId: room.id,
+              startDateTime: start,
+              endDateTime: end,
+              ...(start.getTime() !== reservation.startDateTime.getTime()
+                ? { reminderSentAt: null }
+                : {}),
+            },
           });
           if (moved.count === 0) {
             throw new ConflictException({
@@ -134,6 +141,11 @@ export class ReallocationsService {
           }
           await tx.reservationSlot.deleteMany({ where: { reservationId } });
           await insertSlots(tx, reservationId, [room.id], slotStarts, rules.slotMinutes);
+          await this.notifications.resolveForReservation(
+            reservationId,
+            ['RESERVATION_REMINDER'],
+            tx,
+          );
           await tx.reallocation.create({
             data: {
               reservationId,
@@ -150,6 +162,7 @@ export class ReallocationsService {
           await this.notifications.notify(
             {
               userId: reservation.userId,
+              reservationId,
               type: 'RESERVATION_REALLOCATED',
               title: 'Tu reserva fue reasignada',
               message: buildReallocationNotice({
@@ -171,6 +184,7 @@ export class ReallocationsService {
               requesterId: reservation.userId,
               requesterName: reservation.user.fullName,
               label: roomLabel(room),
+              reservationId,
             });
           }
           await this.audit.log(

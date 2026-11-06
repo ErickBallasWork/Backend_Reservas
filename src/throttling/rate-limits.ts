@@ -15,6 +15,7 @@ export const RATE_LIMITS = {
   refresh: { limit: 30, ttl: MINUTE_MS },
   logout: { limit: 30, ttl: MINUTE_MS },
   demoLogin: { limit: 10, ttl: MINUTE_MS },
+  notificationsPolling: { limit: 600, ttl: MINUTE_MS },
 } satisfies Record<string, RateLimit>;
 
 export function limitFor(name: Exclude<keyof typeof RATE_LIMITS, 'global'>) {
