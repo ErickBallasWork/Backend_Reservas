@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AccessRequestsModule } from './access-requests/access-requests.module';
 import { ApprovalsModule } from './approvals/approvals.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
@@ -24,6 +25,7 @@ import { UsersModule } from './users/users.module';
     HealthModule,
     AuthModule,
     UsersModule,
+    AccessRequestsModule,
     CatalogModule,
     AvailabilityModule,
     SanctionsModule,

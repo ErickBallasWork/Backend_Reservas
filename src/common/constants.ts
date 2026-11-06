@@ -46,6 +46,14 @@ export const BLOCKING_STATUSES: string[] = [
   Status.CHECKED_IN,
 ];
 
+export const ACCESS_REQUEST_KINDS = ['NEW_USER', 'NEW_DEVICE'] as const;
+export type AccessRequestKind = (typeof ACCESS_REQUEST_KINDS)[number];
+
+export const ACCESS_REQUEST_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'] as const;
+export type AccessRequestStatus = (typeof ACCESS_REQUEST_STATUSES)[number];
+
+export const ACCESS_REQUEST_COOLDOWN_DAYS = 7;
+
 export const SANCTION_STATUSES = ['ACTIVE', 'RESOLVED'] as const;
 
 export const CHECK_IN_METHODS = ['BUTTON', 'QR'] as const;

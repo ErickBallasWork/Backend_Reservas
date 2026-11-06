@@ -1,9 +1,9 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../common/current-user/current-user.decorator';
 import { CurrentUserData } from '../common/current-user/current-user.types';
-import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
+import { UpdateUserDto } from './dto/user.dto';
 import { UsersService } from './users.service';
 
 @ApiTags('Usuarios y roles')
@@ -28,13 +28,6 @@ export class UsersController {
   @ApiOperation({ summary: 'Listar usuarios con sus roles' })
   list() {
     return this.users.list();
-  }
-
-  @Roles('ADMIN')
-  @Post('users')
-  @ApiOperation({ summary: 'Dar de alta un usuario antes de su primer inicio de sesión' })
-  create(@CurrentUser() admin: CurrentUserData, @Body() dto: CreateUserDto) {
-    return this.users.create(admin, dto);
   }
 
   @Roles('ADMIN')

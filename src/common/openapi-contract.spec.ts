@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
+import { AccessRequestsController } from '../access-requests/access-requests.controller';
+import { AccessRequestsService } from '../access-requests/access-requests.service';
 import { AuthController } from '../auth/auth.controller';
 import { AuthService } from '../auth/auth.service';
 import { BuildingsController } from '../catalog/buildings.controller';
@@ -27,6 +29,11 @@ const DOCUMENTED_OPERATIONS: [string, string][] = [
   ['post', '/resources'],
   ['patch', '/resources/{id}'],
   ['post', '/auth/demo'],
+  ['post', '/access-requests'],
+  ['post', '/access-requests/status'],
+  ['get', '/access-requests'],
+  ['post', '/access-requests/{id}/approve'],
+  ['post', '/access-requests/{id}/reject'],
 ];
 
 function sourceFiles(dir: string): string[] {
@@ -43,9 +50,16 @@ describe('OpenAPI contract', () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
-      controllers: [AuthController, BuildingsController, CatalogController, ResourcesController],
+      controllers: [
+        AuthController,
+        AccessRequestsController,
+        BuildingsController,
+        CatalogController,
+        ResourcesController,
+      ],
       providers: [
         { provide: AuthService, useValue: {} },
+        { provide: AccessRequestsService, useValue: {} },
         { provide: AppConfigService, useValue: {} },
         { provide: BuildingsService, useValue: {} },
         { provide: ResourcesService, useValue: {} },

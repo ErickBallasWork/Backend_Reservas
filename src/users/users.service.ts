@@ -1,15 +1,11 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { USER_WITH_ROLES } from '../auth/current-user.mapper';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateUserDto, RoleAssignmentDto, UpdateUserDto } from './dto/user.dto';
+import { UpdateUserDto } from './dto/user.dto';
+import { RoleRowsService } from './role-rows.service';
 import { assertCanManageRoles, removesSuperadminAccess } from './role-assignment.policy';
 
 @Injectable()
@@ -17,6 +13,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly roleRows: RoleRowsService,
   ) {}
 
   async me(user: CurrentUserData) {
@@ -51,72 +48,6 @@ export class UsersService {
     }));
   }
 
-  private async toRoleRows(roles: RoleAssignmentDto[]) {
-    const all = await this.prisma.role.findMany();
-    const idByName = new Map<string, number>(all.map((r) => [r.name, r.id]));
-    const rows: { roleId: number; buildingId: string | null }[] = [];
-    for (const r of roles) {
-      const roleId = idByName.get(r.role);
-      if (roleId === undefined) {
-        throw new BadRequestException({
-          code: 'ROLE_NOT_FOUND',
-          message: `El rol ${r.role} no existe. ¿Corriste el seed?`,
-        });
-      }
-      let buildingId: string | null = null;
-      if (r.role === 'SPOC_EDIFICIO') {
-        if (!r.buildingId) {
-          throw new BadRequestException({
-            code: 'BUILDING_REQUIRED',
-            message: 'El rol SPOC_EDIFICIO necesita buildingId',
-          });
-        }
-        const building = await this.prisma.building.findUnique({ where: { id: r.buildingId } });
-        if (!building) {
-          throw new NotFoundException({
-            code: 'BUILDING_NOT_FOUND',
-            message: `No existe el edificio ${r.buildingId}`,
-          });
-        }
-        buildingId = building.id;
-      }
-      rows.push({ roleId, buildingId });
-    }
-    return rows;
-  }
-
-  async create(admin: CurrentUserData, dto: CreateUserDto) {
-    const roles: RoleAssignmentDto[] = dto.roles ?? [{ role: 'ASOCIADO' }];
-    assertCanManageRoles(
-      admin.roles,
-      [],
-      roles.map((r) => r.role),
-    );
-    const rows = await this.toRoleRows(roles);
-    const user = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.user.create({
-        data: {
-          email: dto.email.trim().toLowerCase(),
-          fullName: dto.fullName.trim(),
-          department: dto.department?.trim(),
-        },
-      });
-      await tx.userRole.createMany({ data: rows.map((r) => ({ ...r, userId: created.id })) });
-      await this.audit.log(
-        {
-          userId: admin.id,
-          action: 'USER_CREATED',
-          entity: 'User',
-          entityId: created.id,
-          details: { email: created.email, roles },
-        },
-        tx,
-      );
-      return created;
-    });
-    return this.get(user.id);
-  }
-
   async update(admin: CurrentUserData, id: string, dto: UpdateUserDto) {
     const before = await this.get(id);
     const beforeRoles = before.roles.map((r) => r.role.name);
@@ -130,7 +61,7 @@ export class UsersService {
         roles: requestedRoles,
       },
     );
-    const rows = dto.roles ? await this.toRoleRows(dto.roles) : null;
+    const rows = dto.roles ? await this.roleRows.resolve(dto.roles) : null;
 
     await this.prisma.$transaction(async (tx) => {
       if (rows) {

@@ -86,13 +86,37 @@ model User {
   reservations      Reservation[]
   approvals         Approval[]
   reallocations     Reallocation[]
-  sanctions         Sanction[]     @relation("SanctionUser")
-  sanctionsResolved Sanction[]     @relation("SanctionResolver")
+  sanctions         Sanction[]      @relation("SanctionUser")
+  sanctionsResolved Sanction[]      @relation("SanctionResolver")
   notifications     Notification[]
   auditLogs         AuditLog[]
   checkIns          CheckIn[]
+  accessDecisions   AccessRequest[] @relation("AccessRequestDecider")
 
   @@map("USERS")
+}
+
+// NEW_USER | NEW_DEVICE. Una solicitud aprobada habilita un dispositivo concreto (ADR-023, Q-14).
+model AccessRequest {
+  id               String    @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  email            String    @map("Email") @db.NVarChar(320)
+  fullName         String    @map("FullName") @db.NVarChar(200)
+  department       String?   @map("Department") @db.NVarChar(120)
+  kind             String    @map("Kind") @db.NVarChar(12)
+  // PENDING | APPROVED | REJECTED
+  status           String    @default("PENDING") @map("Status") @db.NVarChar(10)
+  deviceSecretHash String    @map("DeviceSecretHash") @db.NVarChar(64)
+  deviceLabel      String?   @map("DeviceLabel") @db.NVarChar(200)
+  requestedAt      DateTime  @default(now()) @map("RequestedAt")
+  decidedAt        DateTime? @map("DecidedAt")
+  decidedById      String?   @map("DecidedById") @db.UniqueIdentifier
+  decisionComment  String?   @map("DecisionComment") @db.NVarChar(500)
+
+  decidedBy User? @relation("AccessRequestDecider", fields: [decidedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([status, requestedAt])
+  @@index([email, status])
+  @@map("ACCESS_REQUEST")
 }
 
 // ASOCIADO | ADMIN | SPOC_ADMIN | LIDER | SPOC_EDIFICIO | SUPERADMIN (se cargan con el seed)

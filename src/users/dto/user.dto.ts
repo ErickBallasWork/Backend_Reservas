@@ -4,9 +4,7 @@ import {
   ArrayNotEmpty,
   IsArray,
   IsBoolean,
-  IsEmail,
   IsIn,
-  IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
@@ -24,33 +22,6 @@ export class RoleAssignmentDto {
   @IsOptional()
   @IsUUID()
   buildingId?: string;
-}
-
-export class CreateUserDto {
-  @ApiProperty({ description: 'Corporate email used to sign in' })
-  @IsEmail()
-  email!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(200)
-  fullName!: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(120)
-  department?: string;
-
-  @ApiPropertyOptional({
-    description: 'Defaults to ASOCIADO when omitted',
-    type: [RoleAssignmentDto],
-  })
-  @IsOptional()
-  @IsArray()
-  @ArrayNotEmpty()
-  @ValidateNested({ each: true })
-  @Type(() => RoleAssignmentDto)
-  roles?: RoleAssignmentDto[];
 }
 
 export class UpdateUserDto {

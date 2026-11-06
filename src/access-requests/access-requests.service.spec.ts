@@ -1,0 +1,274 @@
+import { Prisma } from '@prisma/client';
+import { type AuditService } from '../audit/audit.service';
+import { type CurrentUserData } from '../common/current-user/current-user.types';
+import { type AppConfigService } from '../config/app-config.service';
+import { type NotificationsService } from '../notifications/notifications.service';
+import { type PrismaService } from '../prisma/prisma.service';
+import { type RoleRowsService } from '../users/role-rows.service';
+import { hashDeviceSecret } from './access-request.rules';
+import { AccessRequestsService } from './access-requests.service';
+
+const SECRET = 'a'.repeat(43);
+const ACTOR: CurrentUserData = {
+  id: 'superadmin-id',
+  email: 'root@tcs.com',
+  fullName: 'Root',
+  roles: ['SUPERADMIN'],
+  spocBuildingIds: [],
+};
+
+function build() {
+  const accessRequest = {
+    create: jest.fn(),
+    findFirst: jest.fn().mockResolvedValue(null),
+    findUnique: jest.fn(),
+    findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'req-id', decidedBy: null }),
+    updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    findMany: jest.fn(),
+    count: jest.fn(),
+  };
+  const user = {
+    findUnique: jest.fn().mockResolvedValue(null),
+    findMany: jest.fn().mockResolvedValue([{ id: 'superadmin-id' }]),
+    create: jest.fn().mockResolvedValue({ id: 'new-user-id' }),
+  };
+  const userRole = { createMany: jest.fn() };
+  const tx = { accessRequest, user, userRole };
+  const prisma = {
+    accessRequest,
+    user,
+    $transaction: jest.fn((run: (client: typeof tx) => unknown) => run(tx)),
+  };
+  const audit = { log: jest.fn() };
+  const notifications = { notify: jest.fn() };
+  const roleRows = { resolve: jest.fn().mockResolvedValue([{ roleId: 1, buildingId: null }]) };
+  const service = new AccessRequestsService(
+    prisma as unknown as PrismaService,
+    audit as unknown as AuditService,
+    notifications as unknown as NotificationsService,
+    {
+      auth: { allowedEmailDomains: ['tcs.com', 'pichincha.com'] },
+      server: { timeZone: 'America/Guayaquil' },
+    } as unknown as AppConfigService,
+    roleRows as unknown as RoleRowsService,
+  );
+  return { service, accessRequest, user, userRole, audit, notifications, roleRows };
+}
+
+const createDto = {
+  email: ' Ana@TCS.com ',
+  fullName: 'Ana Pérez',
+  deviceSecret: SECRET,
+  deviceLabel: 'Chrome en Windows',
+};
+
+describe('AccessRequestsService.create', () => {
+  it('rejects a domain that is not allowed', async () => {
+    const { service, accessRequest } = build();
+
+    await expect(service.create({ ...createDto, email: 'ana@gmail.com' })).rejects.toMatchObject({
+      response: { code: 'DOMAIN_NOT_ALLOWED' },
+    });
+    expect(accessRequest.create).not.toHaveBeenCalled();
+  });
+
+  it('creates a NEW_USER request, hashes the secret and notifies the SUPERADMINs', async () => {
+    const { service, accessRequest, notifications, audit } = build();
+    accessRequest.create.mockResolvedValue({
+      id: 'req-id',
+      fullName: 'Ana Pérez',
+      email: 'ana@tcs.com',
+    });
+
+    const result = await service.create(createDto);
+
+    expect(result).toEqual({ requestId: 'req-id' });
+    expect(accessRequest.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        email: 'ana@tcs.com',
+        kind: 'NEW_USER',
+        deviceSecretHash: hashDeviceSecret(SECRET),
+      }) as unknown,
+    });
+    expect(notifications.notify).toHaveBeenCalledTimes(1);
+    expect(audit.log).toHaveBeenCalledTimes(1);
+  });
+
+  it('creates a NEW_DEVICE request for an existing user and keeps their name', async () => {
+    const { service, accessRequest, user } = build();
+    user.findUnique.mockResolvedValue({ id: 'u', fullName: 'Ana Existente', department: 'TI' });
+    accessRequest.create.mockResolvedValue({ id: 'req-id', fullName: 'Ana Existente' });
+
+    await service.create(createDto);
+
+    expect(accessRequest.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        kind: 'NEW_DEVICE',
+        fullName: 'Ana Existente',
+      }) as unknown,
+    });
+  });
+
+  it('refuses a second pending request for the same email', async () => {
+    const { service, accessRequest } = build();
+    accessRequest.findFirst.mockResolvedValueOnce({ id: 'other' });
+
+    await expect(service.create(createDto)).rejects.toMatchObject({
+      response: { code: 'ACCESS_REQUEST_PENDING' },
+    });
+  });
+
+  it('maps the unique index violation of a concurrent request to the same error', async () => {
+    const { service, accessRequest } = build();
+    accessRequest.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('duplicate', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+
+    await expect(service.create(createDto)).rejects.toMatchObject({
+      response: { code: 'ACCESS_REQUEST_PENDING' },
+    });
+  });
+
+  it('blocks a new request during the cooldown after a rejection', async () => {
+    const { service, accessRequest } = build();
+    accessRequest.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ decidedAt: new Date(Date.now() - 24 * 60 * 60 * 1000) });
+
+    await expect(service.create(createDto)).rejects.toMatchObject({
+      response: { code: 'ACCESS_REQUEST_COOLDOWN' },
+    });
+  });
+
+  it('allows a new request once the cooldown is over', async () => {
+    const { service, accessRequest } = build();
+    accessRequest.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ decidedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) });
+    accessRequest.create.mockResolvedValue({ id: 'req-id', fullName: 'Ana Pérez' });
+
+    await expect(service.create(createDto)).resolves.toEqual({ requestId: 'req-id' });
+  });
+});
+
+describe('AccessRequestsService.status', () => {
+  it('answers only to the device that created the request', async () => {
+    const { service, accessRequest } = build();
+    accessRequest.findUnique.mockResolvedValue({
+      status: 'REJECTED',
+      decisionComment: 'No corresponde',
+      deviceSecretHash: hashDeviceSecret(SECRET),
+    });
+
+    await expect(service.status({ requestId: 'req-id', deviceSecret: SECRET })).resolves.toEqual({
+      status: 'REJECTED',
+      decisionComment: 'No corresponde',
+    });
+    await expect(
+      service.status({ requestId: 'req-id', deviceSecret: 'b'.repeat(43) }),
+    ).rejects.toMatchObject({ response: { code: 'ACCESS_REQUEST_NOT_FOUND' } });
+  });
+});
+
+describe('AccessRequestsService.approve', () => {
+  const pending = {
+    id: 'req-id',
+    email: 'ana@tcs.com',
+    fullName: 'Ana',
+    department: null,
+    kind: 'NEW_USER',
+    status: 'PENDING',
+  };
+
+  it('creates the user with ASOCIADO by default and audits the decision', async () => {
+    const { service, accessRequest, user, userRole, audit, roleRows } = build();
+    accessRequest.findUnique.mockResolvedValue(pending);
+
+    await service.approve(ACTOR, 'req-id', {});
+
+    expect(roleRows.resolve).toHaveBeenCalledWith([{ role: 'ASOCIADO' }]);
+    expect(user.create).toHaveBeenCalled();
+    expect(userRole.createMany).toHaveBeenCalled();
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'ACCESS_REQUEST_APPROVED', userId: ACTOR.id }),
+      expect.anything(),
+    );
+  });
+
+  it('does not create a user for an existing one', async () => {
+    const { service, accessRequest, user } = build();
+    accessRequest.findUnique.mockResolvedValue({ ...pending, kind: 'NEW_DEVICE' });
+    user.findUnique.mockResolvedValue({ id: 'u', isActive: true });
+
+    await service.approve(ACTOR, 'req-id', {});
+
+    expect(user.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses to approve a device of a deactivated user', async () => {
+    const { service, accessRequest, user } = build();
+    accessRequest.findUnique.mockResolvedValue(pending);
+    user.findUnique.mockResolvedValue({ id: 'u', isActive: false });
+
+    await expect(service.approve(ACTOR, 'req-id', {})).rejects.toMatchObject({
+      response: { code: 'USER_INACTIVE' },
+    });
+  });
+
+  it('refuses roles for an existing user', async () => {
+    const { service, accessRequest, user } = build();
+    accessRequest.findUnique.mockResolvedValue(pending);
+    user.findUnique.mockResolvedValue({ id: 'u', isActive: true });
+
+    await expect(
+      service.approve(ACTOR, 'req-id', { roles: [{ role: 'ADMIN' }] }),
+    ).rejects.toMatchObject({ response: { code: 'BAD_REQUEST' } });
+  });
+
+  it('refuses a request that was already resolved', async () => {
+    const { service, accessRequest } = build();
+    accessRequest.findUnique.mockResolvedValue({ ...pending, status: 'APPROVED' });
+
+    await expect(service.approve(ACTOR, 'req-id', {})).rejects.toMatchObject({
+      response: { code: 'ALREADY_RESOLVED' },
+    });
+  });
+
+  it('loses the race when someone else decides first', async () => {
+    const { service, accessRequest } = build();
+    accessRequest.findUnique.mockResolvedValue(pending);
+    accessRequest.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(service.approve(ACTOR, 'req-id', {})).rejects.toMatchObject({
+      response: { code: 'ALREADY_RESOLVED' },
+    });
+  });
+});
+
+describe('AccessRequestsService.reject', () => {
+  it('stores the trimmed comment and audits the decision', async () => {
+    const { service, accessRequest, audit } = build();
+    accessRequest.findUnique.mockResolvedValue({
+      id: 'req-id',
+      email: 'ana@tcs.com',
+      status: 'PENDING',
+    });
+
+    await service.reject(ACTOR, 'req-id', { comment: '  No corresponde  ' });
+
+    expect(accessRequest.updateMany).toHaveBeenCalledWith({
+      where: { id: 'req-id', status: 'PENDING' },
+      data: expect.objectContaining({
+        status: 'REJECTED',
+        decisionComment: 'No corresponde',
+      }) as unknown,
+    });
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'ACCESS_REQUEST_REJECTED' }),
+      expect.anything(),
+    );
+  });
+});
