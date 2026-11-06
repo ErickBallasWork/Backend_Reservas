@@ -79,6 +79,7 @@ Cada módulo tiene casi siempre los mismos archivos:
 | `approvals/` | `GET /approvals/pending`, `POST /approvals/:reservationId` | HU-15: el Líder aprueba entrenamientos |
 | `reallocations/` | `POST /reservations/:id/reallocate` | HU-17, HU-18: el SPOC mueve reservas de sala |
 | `sanctions/` | `GET /sanctions`, `PATCH /sanctions/:id/resolve`, `POST /sanctions/no-show/run` | HU-21, HU-22: No-Show y sanciones |
+| `transfers/` | `POST /reservations/:id/transfer-requests`, `GET /transfer-requests/received`, `GET /transfer-requests/sent`, `POST /transfer-requests/:id/accept`, `POST /transfer-requests/:id/reject`, `PATCH /transfer-requests/:id/cancel` | Cesión entre asociados: alguien pide una reserva ocupada con su justificación y el dueño acepta o rechaza |
 | `dashboard/` | `GET /dashboard/reservations`, `GET /dashboard/metrics` | HU-16: panel del SPOC Administrativo y Líder |
 | `reports/` | `GET /reports/occupancy`, `GET /reports/usage-by-department` (+ `/export` en CSV) | HU-23: reportes |
 

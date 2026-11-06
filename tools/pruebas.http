@@ -151,3 +151,90 @@ x-demo-user: {{admin}}
 ### 19. Auditoría (Administrador)
 GET {{api}}/audit
 x-demo-user: {{admin}}
+
+# ---------------- Cesión de reservas entre asociados ----------------
+@sofia = sofia.spocadmin@demo.com
+
+### 20. Ana reserva la Sala Pichincha a las 13:00 (la que luego le van a pedir)
+# @name reservaParaCeder
+POST {{api}}/reservations
+x-demo-user: {{ana}}
+Content-Type: application/json
+
+{
+  "resourceId": "{{salaId}}",
+  "startDateTime": "{{dia}}T18:00:00Z",
+  "endDateTime": "{{dia}}T19:00:00Z",
+  "purpose": "INTERNAL_MEETING",
+  "justification": "Reunión de seguimiento del equipo"
+}
+
+### 21. Luis ve la sala ocupada: en "reservations" aparece la reserva con transferable = true
+GET {{api}}/availability/resources/{{salaId}}?from={{dia}}T13:00:00Z&to={{dia}}T23:00:00Z
+x-demo-user: {{luis}}
+
+### 22. Luis pide la reserva y explica por qué (a Ana le llega un aviso con el motivo)
+# @name pedidoLuis
+POST {{api}}/reservations/{{reservaParaCeder.response.body.id}}/transfer-requests
+x-demo-user: {{luis}}
+Content-Type: application/json
+
+{
+  "purpose": "CLIENT_MEETING",
+  "justification": "Llega un cliente a las 13:00 y es la única sala con pantalla grande."
+}
+
+### 23. Sofía también la pide
+# @name pedidoSofia
+POST {{api}}/reservations/{{reservaParaCeder.response.body.id}}/transfer-requests
+x-demo-user: {{sofia}}
+Content-Type: application/json
+
+{
+  "purpose": "INTERNAL_MEETING",
+  "justification": "Necesito hacer una capacitación corta con mi equipo."
+}
+
+### 24. Ana ve las solicitudes que le llegaron (con nombre, correo y motivo de cada uno)
+GET {{api}}/transfer-requests/received?status=PENDING
+x-demo-user: {{ana}}
+
+### 25. Bandeja de Ana: aviso TRANSFER_REQUESTED con el motivo
+GET {{api}}/notifications?unreadOnly=true
+x-demo-user: {{ana}}
+
+### 26. Ana rechaza a Sofía (el comentario es obligatorio)
+POST {{api}}/transfer-requests/{{pedidoSofia.response.body.id}}/reject
+x-demo-user: {{ana}}
+Content-Type: application/json
+
+{
+  "comment": "Se la voy a ceder a Luis porque tiene un cliente."
+}
+
+### 27. Ana le cede la reserva a Luis: la de Ana queda TRANSFERRED y se crea la de Luis
+POST {{api}}/transfer-requests/{{pedidoLuis.response.body.id}}/accept
+x-demo-user: {{ana}}
+Content-Type: application/json
+
+{
+  "comment": "Sin problema, me muevo a otra sala."
+}
+
+### 28. Mis reservas de Luis: aparece la Sala Pichincha CONFIRMED con el mismo horario
+GET {{api}}/reservations/mine
+x-demo-user: {{luis}}
+
+### 29. Lo que envió Sofía: REJECTED con el comentario de Ana
+GET {{api}}/transfer-requests/sent
+x-demo-user: {{sofia}}
+
+### 30. Pedir dos veces lo mismo o pedir algo propio da error (aquí: 422 OWN_RESERVATION)
+POST {{api}}/reservations/{{reservaParaCeder.response.body.id}}/transfer-requests
+x-demo-user: {{ana}}
+Content-Type: application/json
+
+{
+  "purpose": "INTERNAL_MEETING",
+  "justification": "Prueba"
+}

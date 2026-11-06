@@ -125,7 +125,7 @@ export class TransfersService {
           title: 'Te piden ceder una reserva',
           message:
             `${requester.fullName} (${requester.email}) necesita ${label} ` +
-            `del ${formatDate(reservation.startDateTime)} al ${formatDate(reservation.endDateTime)}. ` +
+            `(del ${formatDate(reservation.startDateTime)} al ${formatDate(reservation.endDateTime)}). ` +
             `Motivo: ${justification}`,
         },
         tx,
@@ -262,7 +262,7 @@ export class TransfersService {
               type: 'TRANSFER_ACCEPTED',
               title: 'Te cedieron la reserva',
               message:
-                `${owner.fullName} te cedió ${label} del ${formatDate(start)} al ${formatDate(end)}. ` +
+                `${owner.fullName} te cedió ${label} (del ${formatDate(start)} al ${formatDate(end)}). ` +
                 (waitsForLeader
                   ? 'Como es un entrenamiento, espera la aprobación del Líder de Conocimiento.'
                   : 'Tu reserva quedó confirmada.') +
@@ -333,8 +333,8 @@ export class TransfersService {
           type: 'TRANSFER_REJECTED',
           title: 'No te cedieron la reserva',
           message:
-            `${owner.fullName} no puede cederte ${label} del ${formatDate(reservation.startDateTime)} ` +
-            `al ${formatDate(reservation.endDateTime)}. Motivo: ${comment}`,
+            `${owner.fullName} no puede cederte ${label} (del ${formatDate(reservation.startDateTime)} ` +
+            `al ${formatDate(reservation.endDateTime)}). Motivo: ${comment}`,
         },
         tx,
       );
