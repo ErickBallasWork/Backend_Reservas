@@ -60,7 +60,7 @@ describe('ReservationsService.checkIn', () => {
   it('registers the usage inside the window', async () => {
     setNow('2026-11-11T15:10:00Z');
     const { service, tx, audit } = build();
-    await service.checkIn(owner, 'res-1', {});
+    await service.checkIn(owner, 'res-1');
     expect(tx.reservation.updateMany).toHaveBeenCalledWith({
       where: { id: 'res-1', status: 'CONFIRMED' },
       data: { status: 'CHECKED_IN' },
@@ -77,7 +77,7 @@ describe('ReservationsService.checkIn', () => {
   it('rejects the usage after the window', async () => {
     setNow('2026-11-11T15:16:00Z');
     const { service } = build();
-    await expect(service.checkIn(owner, 'res-1', {})).rejects.toMatchObject({
+    await expect(service.checkIn(owner, 'res-1')).rejects.toMatchObject({
       response: { code: 'OUTSIDE_CHECKIN_WINDOW' },
     });
   });
@@ -85,7 +85,7 @@ describe('ReservationsService.checkIn', () => {
   it('rejects the usage before the window', async () => {
     setNow('2026-11-11T14:44:00Z');
     const { service } = build();
-    await expect(service.checkIn(owner, 'res-1', {})).rejects.toMatchObject({
+    await expect(service.checkIn(owner, 'res-1')).rejects.toMatchObject({
       response: { code: 'OUTSIDE_CHECKIN_WINDOW' },
     });
   });
@@ -95,7 +95,7 @@ describe('ReservationsService.checkIn', () => {
     async (status) => {
       setNow('2026-11-11T15:05:00Z');
       const { service } = build(reservation({ status }));
-      await expect(service.checkIn(owner, 'res-1', {})).rejects.toMatchObject({
+      await expect(service.checkIn(owner, 'res-1')).rejects.toMatchObject({
         response: { code: 'NOT_CHECKABLE' },
       });
     },
@@ -104,7 +104,7 @@ describe('ReservationsService.checkIn', () => {
   it('rejects someone else reservation', async () => {
     setNow('2026-11-11T15:05:00Z');
     const { service } = build(reservation({ userId: 'other' }));
-    await expect(service.checkIn(owner, 'res-1', {})).rejects.toMatchObject({
+    await expect(service.checkIn(owner, 'res-1')).rejects.toMatchObject({
       response: { code: 'NOT_OWNER' },
     });
   });
@@ -112,7 +112,7 @@ describe('ReservationsService.checkIn', () => {
   it('does not overwrite a reservation marked as no-show meanwhile', async () => {
     setNow('2026-11-11T15:14:59Z');
     const { service, tx } = build(reservation(), 0);
-    await expect(service.checkIn(owner, 'res-1', {})).rejects.toMatchObject({
+    await expect(service.checkIn(owner, 'res-1')).rejects.toMatchObject({
       response: { code: 'CONCURRENT_CONFLICT' },
     });
     expect(tx.checkIn.create).not.toHaveBeenCalled();

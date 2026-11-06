@@ -3,7 +3,6 @@ import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestj
 import { CurrentUser } from '../common/current-user/current-user.decorator';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import {
-  CheckInDto,
   CreateReservationDto,
   MyReservationsQueryDto,
   UpdateReservationDto,
@@ -79,12 +78,12 @@ export class ReservationsController {
 
   @Post(':id/check-in')
   @ApiCreatedResponse({ type: ReservationDetailResponseDto })
-  @ApiOperation({ summary: 'Registrar que usé el espacio (HU-20)' })
-  checkIn(
-    @CurrentUser() user: CurrentUserData,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: CheckInDto,
-  ) {
-    return this.reservations.checkIn(user, id, dto);
+  @ApiOperation({
+    summary: 'Registrar que usé el espacio (HU-20)',
+    description:
+      'Desde 15 min antes hasta 15 min después del inicio. Solo el dueño de una reserva CONFIRMED.',
+  })
+  checkIn(@CurrentUser() user: CurrentUserData, @Param('id', ParseUUIDPipe) id: string) {
+    return this.reservations.checkIn(user, id);
   }
 }

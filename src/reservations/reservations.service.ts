@@ -23,7 +23,7 @@ import { toLocalSlots } from '../operating-hours/operating-calendar';
 import { OperatingHoursService } from '../operating-hours/operating-hours.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SanctionsService } from '../sanctions/sanctions.service';
-import { CheckInDto, CreateReservationDto, MyReservationsQueryDto } from './dto/reservation.dto';
+import { CreateReservationDto, MyReservationsQueryDto } from './dto/reservation.dto';
 import { LeaderNotifier } from './leader-notifier';
 import { canViewReservation } from './reservation-access.policy';
 import { blockedResourceIds, describeResource } from './reservation-resources';
@@ -311,7 +311,7 @@ export class ReservationsService {
     return this.getById(id);
   }
 
-  async checkIn(user: CurrentUserData, id: string, dto: CheckInDto) {
+  async checkIn(user: CurrentUserData, id: string) {
     const reservation = await this.getOwned(user.id, id);
     if (reservation.status !== Status.CONFIRMED) {
       throw new UnprocessableEntityException({
@@ -345,7 +345,7 @@ export class ReservationsService {
         });
       }
       await tx.checkIn.create({
-        data: { reservationId: id, userId: user.id, method: dto.method ?? 'BUTTON' },
+        data: { reservationId: id, userId: user.id, method: 'BUTTON' },
       });
       await this.audit.log(
         { userId: user.id, action: 'RESERVATION_CHECKED_IN', entity: 'Reservation', entityId: id },

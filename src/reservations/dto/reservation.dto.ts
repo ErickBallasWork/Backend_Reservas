@@ -12,7 +12,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { CHECK_IN_METHODS, PURPOSES, RESERVATION_STATUSES } from '../../common/constants';
+import { PURPOSES, RESERVATION_STATUSES } from '../../common/constants';
 import { PaginationQueryDto } from '../../common/pagination.dto';
 
 export class CreateReservationDto {
@@ -58,17 +58,6 @@ export class CreateReservationDto {
 }
 
 export class UpdateReservationDto extends PartialType(CreateReservationDto) {}
-
-export class CheckInDto {
-  @ApiPropertyOptional({
-    description: 'Button in the app or QR code in the room',
-    enum: [...CHECK_IN_METHODS],
-    default: 'BUTTON',
-  })
-  @IsOptional()
-  @IsIn([...CHECK_IN_METHODS])
-  method?: string;
-}
 
 export class MyReservationsQueryDto extends PaginationQueryDto {
   @ApiPropertyOptional({ enum: [...RESERVATION_STATUSES] })
