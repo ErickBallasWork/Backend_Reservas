@@ -4,12 +4,19 @@ import { BuildingsService } from './buildings.service';
 import { CatalogLookupService } from './catalog-lookup.service';
 import { CatalogController } from './catalog.controller';
 import { CatalogTreeService } from './catalog-tree.service';
+import { LabLaptopSlotsService } from './lab-laptop-slots.service';
 import { ResourcesController } from './resources.controller';
 import { ResourcesService } from './resources.service';
 
 @Module({
   controllers: [BuildingsController, ResourcesController, CatalogController],
-  providers: [BuildingsService, ResourcesService, CatalogLookupService, CatalogTreeService],
+  providers: [
+    BuildingsService,
+    ResourcesService,
+    CatalogLookupService,
+    CatalogTreeService,
+    LabLaptopSlotsService,
+  ],
   exports: [CatalogLookupService],
 })
 export class CatalogModule {}

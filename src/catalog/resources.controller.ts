@@ -5,15 +5,17 @@ import { CurrentUser } from '../common/current-user/current-user.decorator';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { ApiErrorResponses } from '../common/error-response.dto';
 import {
+  FutureReservationResponseDto,
   ResourceDetailResponseDto,
   ResourceListItemResponseDto,
   ResourceResponseDto,
 } from './dto/catalog-response.dto';
+import { assertMayListInactive } from './catalog-visibility';
 import { CreateResourceDto, ListResourcesQueryDto, UpdateResourceDto } from './dto/resource.dto';
 import { ResourcesService } from './resources.service';
 
 @ApiTags('Catálogo: salas, laboratorios y laptops')
-@ApiErrorResponses(400, 401, 403, 404, 422)
+@ApiErrorResponses(400, 401, 403, 404, 409, 422)
 @Controller('resources')
 export class ResourcesController {
   constructor(private readonly resources: ResourcesService) {}
@@ -21,7 +23,8 @@ export class ResourcesController {
   @Get()
   @ApiOkResponse({ type: [ResourceListItemResponseDto] })
   @ApiOperation({ summary: 'Listar recursos (filtros: edificio, tipo, laboratorio, capacidad)' })
-  list(@Query() query: ListResourcesQueryDto) {
+  list(@CurrentUser() user: CurrentUserData, @Query() query: ListResourcesQueryDto) {
+    assertMayListInactive(user, query.includeInactive);
     return this.resources.list(query);
   }
 
@@ -34,6 +37,7 @@ export class ResourcesController {
 
   @Roles('ADMIN')
   @Get(':id/future-reservations')
+  @ApiOkResponse({ type: [FutureReservationResponseDto] })
   @ApiOperation({ summary: 'Reservas futuras afectadas si se inactiva (HU-05)' })
   futureReservations(@Param('id', ParseUUIDPipe) id: string) {
     return this.resources.futureReservations(id);

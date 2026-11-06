@@ -57,7 +57,12 @@ export class CatalogLookupService {
   futureReservations(where: Prisma.ReservationWhereInput, db: Db = this.prisma) {
     return db.reservation.findMany({
       where: { ...where, status: { in: BLOCKING_STATUSES }, endDateTime: { gt: new Date() } },
-      include: {
+      select: {
+        id: true,
+        purpose: true,
+        status: true,
+        startDateTime: true,
+        endDateTime: true,
         user: { select: { id: true, fullName: true, email: true } },
         resource: { select: { id: true, name: true, type: true } },
       },

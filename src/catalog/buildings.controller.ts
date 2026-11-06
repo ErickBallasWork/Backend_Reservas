@@ -5,11 +5,16 @@ import { CurrentUser } from '../common/current-user/current-user.decorator';
 import { CurrentUserData } from '../common/current-user/current-user.types';
 import { ApiErrorResponses } from '../common/error-response.dto';
 import { BuildingsService } from './buildings.service';
-import { BuildingDetailResponseDto, BuildingResponseDto } from './dto/catalog-response.dto';
+import { assertMayListInactive } from './catalog-visibility';
+import {
+  BuildingDetailResponseDto,
+  BuildingResponseDto,
+  FutureReservationResponseDto,
+} from './dto/catalog-response.dto';
 import { CreateBuildingDto, ListBuildingsQueryDto, UpdateBuildingDto } from './dto/building.dto';
 
 @ApiTags('Catálogo: edificios')
-@ApiErrorResponses(400, 401, 403, 404)
+@ApiErrorResponses(400, 401, 403, 404, 409)
 @Controller('buildings')
 export class BuildingsController {
   constructor(private readonly buildings: BuildingsService) {}
@@ -17,7 +22,8 @@ export class BuildingsController {
   @Get()
   @ApiOkResponse({ type: [BuildingResponseDto] })
   @ApiOperation({ summary: 'Listar edificios' })
-  list(@Query() query: ListBuildingsQueryDto) {
+  list(@CurrentUser() user: CurrentUserData, @Query() query: ListBuildingsQueryDto) {
+    assertMayListInactive(user, query.includeInactive);
     return this.buildings.list(query.includeInactive);
   }
 
@@ -26,6 +32,14 @@ export class BuildingsController {
   @ApiOperation({ summary: 'Ver un edificio con sus salas y laboratorios' })
   get(@Param('id', ParseUUIDPipe) id: string) {
     return this.buildings.get(id);
+  }
+
+  @Roles('ADMIN')
+  @Get(':id/future-reservations')
+  @ApiOkResponse({ type: [FutureReservationResponseDto] })
+  @ApiOperation({ summary: 'Reservas futuras afectadas si se inactiva el edificio' })
+  futureReservations(@Param('id', ParseUUIDPipe) id: string) {
+    return this.buildings.futureReservations(id);
   }
 
   @Roles('ADMIN')

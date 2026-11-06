@@ -12,6 +12,7 @@ import { rethrowNameTaken } from './catalog-errors';
 import { CatalogLookupService } from './catalog-lookup.service';
 import { GUARDED_TRANSACTION, reservationsOfResource } from './catalog-scopes';
 import { CreateResourceDto, ListResourcesQueryDto, UpdateResourceDto } from './dto/resource.dto';
+import { LabLaptopSlotsService } from './lab-laptop-slots.service';
 
 @Injectable()
 export class ResourcesService {
@@ -19,6 +20,7 @@ export class ResourcesService {
     private readonly prisma: PrismaService,
     private readonly lookup: CatalogLookupService,
     private readonly audit: AuditService,
+    private readonly labLaptopSlots: LabLaptopSlotsService,
   ) {}
 
   list(query: ListResourcesQueryDto) {
@@ -57,7 +59,7 @@ export class ResourcesService {
     return resource;
   }
 
-  private async getLab(labId: string) {
+  private async getActiveLab(labId: string) {
     const lab = await this.prisma.resource.findUnique({ where: { id: labId } });
     if (!lab) {
       throw new NotFoundException({
@@ -71,7 +73,30 @@ export class ResourcesService {
         message: 'Una laptop solo puede pertenecer a un laboratorio de IA',
       });
     }
+    if (!lab.isActive) {
+      throw new UnprocessableEntityException({
+        code: 'PARENT_INACTIVE',
+        message: 'El laboratorio está inactivo. Reactívalo primero',
+      });
+    }
     return lab;
+  }
+
+  private async getActiveBuilding(buildingId: string) {
+    const building = await this.prisma.building.findUnique({ where: { id: buildingId } });
+    if (!building) {
+      throw new NotFoundException({
+        code: 'BUILDING_NOT_FOUND',
+        message: `No existe el edificio ${buildingId}`,
+      });
+    }
+    if (!building.isActive) {
+      throw new UnprocessableEntityException({
+        code: 'BUILDING_INACTIVE',
+        message: 'El edificio está inactivo',
+      });
+    }
+    return building;
   }
 
   async create(actor: CurrentUserData, dto: CreateResourceDto) {
@@ -86,7 +111,7 @@ export class ResourcesService {
           message: 'Una laptop necesita parentResourceId (su laboratorio de IA)',
         });
       }
-      const lab = await this.getLab(dto.parentResourceId);
+      const lab = await this.getActiveLab(dto.parentResourceId);
       buildingId = lab.buildingId;
       parentResourceId = lab.id;
       capacity = 1;
@@ -106,19 +131,12 @@ export class ResourcesService {
           message: 'Indica la capacidad (número de personas)',
         });
       }
-      const building = await this.prisma.building.findUnique({ where: { id: dto.buildingId } });
-      if (!building) {
-        throw new NotFoundException({
-          code: 'BUILDING_NOT_FOUND',
-          message: `No existe el edificio ${dto.buildingId}`,
-        });
-      }
-      buildingId = building.id;
+      buildingId = (await this.getActiveBuilding(dto.buildingId)).id;
     }
 
-    try {
-      return await this.prisma.$transaction(async (tx) => {
-        const resource = await tx.resource.create({
+    return this.prisma.$transaction(async (tx) => {
+      const resource = await tx.resource
+        .create({
           data: {
             type: dto.type,
             buildingId,
@@ -129,28 +147,30 @@ export class ResourcesService {
             rules: dto.rules?.trim(),
             assetTag: dto.type === 'LAPTOP' ? dto.assetTag?.trim() : null,
           },
-        });
-        await this.audit.log(
-          {
-            userId: actor.id,
-            action: 'RESOURCE_CREATED',
-            entity: 'Resource',
-            entityId: resource.id,
-            details: resource,
-          },
-          tx,
-        );
-        return resource;
-      });
-    } catch (error) {
-      return rethrowNameTaken(error, 'resource');
-    }
+        })
+        .catch((error: unknown) => rethrowNameTaken(error, 'resource'));
+      if (parentResourceId) {
+        await this.labLaptopSlots.blockInFutureLabReservations(tx, resource.id, parentResourceId);
+      }
+      await this.audit.log(
+        {
+          userId: actor.id,
+          action: 'RESOURCE_CREATED',
+          entity: 'Resource',
+          entityId: resource.id,
+          details: resource,
+        },
+        tx,
+      );
+      return resource;
+    }, GUARDED_TRANSACTION);
   }
 
   async update(actor: CurrentUserData, id: string, dto: UpdateResourceDto) {
     const before = await this.get(id);
     const data: Prisma.ResourceUncheckedUpdateInput = {};
-    let movesLaptop = false;
+    let newLabId: string | null = null;
+    let newBuildingId: string | null = null;
 
     if (dto.parentResourceId !== undefined && dto.parentResourceId !== before.parentResourceId) {
       if (before.type !== 'LAPTOP') {
@@ -159,13 +179,28 @@ export class ResourcesService {
           message: 'Solo las laptops tienen parentResourceId',
         });
       }
-      const lab = await this.getLab(dto.parentResourceId);
+      const lab = await this.getActiveLab(dto.parentResourceId);
+      newLabId = lab.id;
       data.parentResourceId = lab.id;
       data.buildingId = lab.buildingId;
-      movesLaptop = true;
+    }
+
+    if (dto.buildingId !== undefined && dto.buildingId !== before.buildingId) {
+      if (before.type === 'LAPTOP') {
+        throw new BadRequestException({
+          code: 'BUILDING_NOT_ALLOWED',
+          message: 'La laptop toma el edificio de su laboratorio',
+        });
+      }
+      newBuildingId = (await this.getActiveBuilding(dto.buildingId)).id;
+      data.buildingId = newBuildingId;
     }
 
     const deactivates = dto.isActive === false && before.isActive;
+    const reactivates = dto.isActive === true && !before.isActive;
+    if (reactivates && before.parentResourceId) {
+      await this.getActiveLab(before.parentResourceId);
+    }
 
     if (dto.name !== undefined) data.name = dto.name.trim();
     if (dto.capacity !== undefined && before.type !== 'LAPTOP') data.capacity = dto.capacity;
@@ -174,39 +209,54 @@ export class ResourcesService {
     if (dto.assetTag !== undefined && before.type === 'LAPTOP') data.assetTag = dto.assetTag.trim();
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
 
-    try {
-      return await this.prisma.$transaction(async (tx) => {
-        if (movesLaptop || deactivates) {
-          await this.lookup.assertNoFutureReservations(
-            reservationsOfResource(before),
-            movesLaptop ? 'La laptop' : 'El recurso',
-            tx,
-          );
-        }
-        const after = await tx.resource.update({ where: { id }, data });
-        await this.audit.log(
-          {
-            userId: actor.id,
-            action: 'RESOURCE_UPDATED',
-            entity: 'Resource',
-            entityId: id,
-            details: {
-              before: {
-                name: before.name,
-                capacity: before.capacity,
-                parentResourceId: before.parentResourceId,
-                isActive: before.isActive,
-              },
-              after,
-            },
-          },
+    return this.prisma.$transaction(async (tx) => {
+      if (newLabId || newBuildingId || deactivates) {
+        await this.lookup.assertNoFutureReservations(
+          reservationsOfResource(before),
+          before.type === 'LAPTOP' ? 'La laptop' : 'El recurso',
           tx,
         );
-        return after;
-      }, GUARDED_TRANSACTION);
-    } catch (error) {
-      return rethrowNameTaken(error, 'resource');
-    }
+      }
+      const after = await tx.resource
+        .update({ where: { id }, data })
+        .catch((error: unknown) => rethrowNameTaken(error, 'resource'));
+
+      if (before.type === 'AI_LAB' && newBuildingId) {
+        await tx.resource
+          .updateMany({ where: { parentResourceId: id }, data: { buildingId: newBuildingId } })
+          .catch((error: unknown) => rethrowNameTaken(error, 'resource'));
+      }
+      if (before.type === 'AI_LAB' && deactivates) {
+        await tx.resource.updateMany({
+          where: { parentResourceId: id, isActive: true },
+          data: { isActive: false },
+        });
+      }
+      if (after.parentResourceId && after.isActive && (newLabId || reactivates)) {
+        await this.labLaptopSlots.blockInFutureLabReservations(tx, id, after.parentResourceId);
+      }
+
+      await this.audit.log(
+        {
+          userId: actor.id,
+          action: 'RESOURCE_UPDATED',
+          entity: 'Resource',
+          entityId: id,
+          details: {
+            before: {
+              name: before.name,
+              capacity: before.capacity,
+              buildingId: before.buildingId,
+              parentResourceId: before.parentResourceId,
+              isActive: before.isActive,
+            },
+            after,
+          },
+        },
+        tx,
+      );
+      return after;
+    }, GUARDED_TRANSACTION);
   }
 
   async futureReservations(id: string) {

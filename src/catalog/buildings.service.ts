@@ -39,27 +39,28 @@ export class BuildingsService {
     return building;
   }
 
+  async futureReservations(id: string) {
+    await this.get(id);
+    return this.lookup.futureReservations(reservationsOfBuilding(id));
+  }
+
   async create(actor: CurrentUserData, dto: CreateBuildingDto) {
-    try {
-      return await this.prisma.$transaction(async (tx) => {
-        const building = await tx.building.create({
-          data: { name: dto.name.trim(), address: dto.address?.trim() },
-        });
-        await this.audit.log(
-          {
-            userId: actor.id,
-            action: 'BUILDING_CREATED',
-            entity: 'Building',
-            entityId: building.id,
-            details: building,
-          },
-          tx,
-        );
-        return building;
-      });
-    } catch (error) {
-      return rethrowNameTaken(error, 'building');
-    }
+    return this.prisma.$transaction(async (tx) => {
+      const building = await tx.building
+        .create({ data: { name: dto.name.trim(), address: dto.address?.trim() } })
+        .catch((error: unknown) => rethrowNameTaken(error, 'building'));
+      await this.audit.log(
+        {
+          userId: actor.id,
+          action: 'BUILDING_CREATED',
+          entity: 'Building',
+          entityId: building.id,
+          details: building,
+        },
+        tx,
+      );
+      return building;
+    });
   }
 
   async update(actor: CurrentUserData, id: string, dto: UpdateBuildingDto) {
@@ -69,33 +70,27 @@ export class BuildingsService {
     if (dto.address !== undefined) data.address = dto.address.trim();
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
 
-    try {
-      return await this.prisma.$transaction(async (tx) => {
-        if (dto.isActive === false && before.isActive) {
-          await this.lookup.assertNoFutureReservations(
-            reservationsOfBuilding(id),
-            'El edificio',
-            tx,
-          );
-        }
-        const after = await tx.building.update({ where: { id }, data });
-        await this.audit.log(
-          {
-            userId: actor.id,
-            action: 'BUILDING_UPDATED',
-            entity: 'Building',
-            entityId: id,
-            details: {
-              before: { name: before.name, address: before.address, isActive: before.isActive },
-              after,
-            },
+    return this.prisma.$transaction(async (tx) => {
+      if (dto.isActive === false && before.isActive) {
+        await this.lookup.assertNoFutureReservations(reservationsOfBuilding(id), 'El edificio', tx);
+      }
+      const after = await tx.building
+        .update({ where: { id }, data })
+        .catch((error: unknown) => rethrowNameTaken(error, 'building'));
+      await this.audit.log(
+        {
+          userId: actor.id,
+          action: 'BUILDING_UPDATED',
+          entity: 'Building',
+          entityId: id,
+          details: {
+            before: { name: before.name, address: before.address, isActive: before.isActive },
+            after,
           },
-          tx,
-        );
-        return after;
-      }, GUARDED_TRANSACTION);
-    } catch (error) {
-      return rethrowNameTaken(error, 'building');
-    }
+        },
+        tx,
+      );
+      return after;
+    }, GUARDED_TRANSACTION);
   }
 }

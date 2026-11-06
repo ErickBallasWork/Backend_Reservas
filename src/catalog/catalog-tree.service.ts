@@ -5,15 +5,16 @@ import { PrismaService } from '../prisma/prisma.service';
 export class CatalogTreeService {
   constructor(private readonly prisma: PrismaService) {}
 
-  tree() {
+  tree(includeInactive = false) {
+    const visible = includeInactive ? {} : { isActive: true };
     return this.prisma.building.findMany({
-      where: { isActive: true },
+      where: visible,
       orderBy: { name: 'asc' },
       include: {
         resources: {
-          where: { isActive: true, parentResourceId: null },
+          where: { ...visible, parentResourceId: null },
           orderBy: [{ type: 'asc' }, { name: 'asc' }],
-          include: { children: { where: { isActive: true }, orderBy: { name: 'asc' } } },
+          include: { children: { where: visible, orderBy: { name: 'asc' } } },
         },
       },
     });

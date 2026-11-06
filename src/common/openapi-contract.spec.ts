@@ -33,6 +33,8 @@ const DOCUMENTED_OPERATIONS: [string, string][] = [
   ['patch', '/buildings/{id}'],
   ['get', '/resources'],
   ['get', '/resources/{id}'],
+  ['get', '/resources/{id}/future-reservations'],
+  ['get', '/buildings/{id}/future-reservations'],
   ['post', '/resources'],
   ['patch', '/resources/{id}'],
   ['post', '/auth/demo'],

@@ -66,6 +66,13 @@ export class UpdateResourceDto {
   @MaxLength(150)
   name?: string;
 
+  @ApiPropertyOptional({
+    description: 'Rooms and labs only: moves it (and the laptops of a lab) to another building',
+  })
+  @IsOptional()
+  @IsUUID()
+  buildingId?: string;
+
   @IsOptional()
   @IsInt()
   @Min(1)

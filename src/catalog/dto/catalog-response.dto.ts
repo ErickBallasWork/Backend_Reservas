@@ -85,6 +85,45 @@ export class ResourceDetailResponseDto extends ResourceResponseDto {
   children!: ResourceResponseDto[];
 }
 
+export class FutureReservationUserDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty()
+  fullName!: string;
+
+  @ApiProperty()
+  email!: string;
+}
+
+export class FutureReservationResourceDto extends NamedReferenceDto {
+  @ApiProperty({ enum: RESOURCE_TYPES, enumName: 'ResourceType' })
+  type!: ResourceType;
+}
+
+export class FutureReservationResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty()
+  purpose!: string;
+
+  @ApiProperty()
+  status!: string;
+
+  @ApiProperty({ format: 'date-time' })
+  startDateTime!: Date;
+
+  @ApiProperty({ format: 'date-time' })
+  endDateTime!: Date;
+
+  @ApiProperty({ type: FutureReservationUserDto })
+  user!: FutureReservationUserDto;
+
+  @ApiProperty({ type: FutureReservationResourceDto })
+  resource!: FutureReservationResourceDto;
+}
+
 export class BuildingDetailResponseDto extends BuildingResponseDto {
   @ApiProperty({ type: [ResourceResponseDto] })
   resources!: ResourceResponseDto[];
