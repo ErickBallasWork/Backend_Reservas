@@ -6,12 +6,12 @@ export class RangeQueryDto {
   /** Desde (ISO 8601), por ejemplo 2026-11-12T13:00:00Z */
   @ApiProperty({ example: '2026-11-12T13:00:00Z' })
   @IsDateString()
-  from: string;
+  from!: string;
 
   /** Hasta (ISO 8601) */
   @ApiProperty({ example: '2026-11-12T23:00:00Z' })
   @IsDateString()
-  to: string;
+  to!: string;
 }
 
 export class SearchAvailabilityQueryDto extends RangeQueryDto {

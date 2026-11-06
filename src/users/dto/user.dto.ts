@@ -18,7 +18,7 @@ import { ROLES } from '../../common/constants';
 export class RoleAssignmentDto {
   @ApiProperty({ enum: [...ROLES] })
   @IsIn([...ROLES])
-  role: string;
+  role!: string;
 
   /** Obligatorio para SPOC_EDIFICIO: id del edificio que administra */
   @IsOptional()
@@ -29,12 +29,12 @@ export class RoleAssignmentDto {
 export class CreateUserDto {
   /** Correo corporativo con el que entrará con Google */
   @IsEmail()
-  email: string;
+  email!: string;
 
   @IsString()
   @IsNotEmpty()
   @MaxLength(200)
-  fullName: string;
+  fullName!: string;
 
   @IsOptional()
   @IsString()

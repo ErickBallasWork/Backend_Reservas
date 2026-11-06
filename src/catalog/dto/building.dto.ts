@@ -7,7 +7,7 @@ export class CreateBuildingDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(150)
-  name: string;
+  name!: string;
 
   @IsOptional()
   @IsString()

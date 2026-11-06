@@ -17,28 +17,28 @@ export class CreateReservationDto {
    * o una laptop (reserva de laptop individual). El tipo de reserva se deduce del recurso.
    */
   @IsUUID()
-  resourceId: string;
+  resourceId!: string;
 
   /** Inicio en ISO 8601 con zona, por ejemplo 2026-11-12T15:00:00Z (10:00 en Ecuador) */
   @ApiProperty({ example: '2026-11-12T15:00:00Z' })
   @IsDateString()
-  startDateTime: string;
+  startDateTime!: string;
 
   @ApiProperty({ example: '2026-11-12T16:00:00Z' })
   @IsDateString()
-  endDateTime: string;
+  endDateTime!: string;
 
   /** Motivo (RF-07) */
   @ApiProperty({ enum: [...PURPOSES], example: 'INTERNAL_MEETING' })
   @IsIn([...PURPOSES])
-  purpose: string;
+  purpose!: string;
 
   /** Detalle o justificación del motivo (RF-07) */
   @ApiProperty({ example: 'Planificación del sprint 3' })
   @IsString()
   @IsNotEmpty()
   @MaxLength(1000)
-  justification: string;
+  justification!: string;
 }
 
 export class CheckInDto {

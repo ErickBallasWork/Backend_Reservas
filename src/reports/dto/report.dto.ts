@@ -7,12 +7,12 @@ export class DateRangeQueryDto {
   /** Desde (ISO 8601) */
   @ApiProperty({ example: '2026-11-01T05:00:00Z' })
   @IsDateString()
-  from: string;
+  from!: string;
 
   /** Hasta (ISO 8601). Máximo un año. */
   @ApiProperty({ example: '2026-12-01T05:00:00Z' })
   @IsDateString()
-  to: string;
+  to!: string;
 }
 
 export class OccupancyQueryDto extends DateRangeQueryDto {

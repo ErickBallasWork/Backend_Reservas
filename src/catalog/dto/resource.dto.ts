@@ -17,7 +17,7 @@ export class CreateResourceDto {
   /** MEETING_ROOM (sala), AI_LAB (laboratorio de IA) o LAPTOP */
   @ApiProperty({ enum: [...RESOURCE_TYPES] })
   @IsIn([...RESOURCE_TYPES])
-  type: string;
+  type!: string;
 
   /** Obligatorio para salas y laboratorios. Para una laptop se toma el edificio de su laboratorio. */
   @IsOptional()
@@ -33,7 +33,7 @@ export class CreateResourceDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(150)
-  name: string;
+  name!: string;
 
   /** Número de personas (para laptops, 1) */
   @IsOptional()

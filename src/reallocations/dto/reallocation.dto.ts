@@ -24,5 +24,5 @@ export class ReallocateReservationDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(1000)
-  justification: string;
+  justification!: string;
 }
