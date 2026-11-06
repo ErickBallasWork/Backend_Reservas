@@ -3,14 +3,15 @@ import {
   Controller,
   Delete,
   Get,
-  Headers,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Put,
   Query,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../common/current-user/current-user.decorator';
 import { CurrentUserData } from '../common/current-user/current-user.types';
@@ -79,9 +80,9 @@ export class NotificationsController {
   registerPush(
     @CurrentUser() user: CurrentUserData,
     @Body() dto: RegisterPushSubscriptionDto,
-    @Headers('user-agent') userAgent?: string,
+    @Req() request: Request,
   ) {
-    return this.pushSubscriptions.register(user.id, dto, userAgent);
+    return this.pushSubscriptions.register(user.id, dto, request.header('user-agent'));
   }
 
   @Delete('push-subscription')
