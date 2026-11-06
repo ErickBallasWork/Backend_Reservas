@@ -334,10 +334,19 @@ export class ReservationsService {
       });
     }
     await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.reservation.updateMany({
+        where: { id, status: Status.CONFIRMED },
+        data: { status: Status.CHECKED_IN },
+      });
+      if (updated.count === 0) {
+        throw new ConflictException({
+          code: 'CONCURRENT_CONFLICT',
+          message: 'La reserva cambió mientras registrabas el uso. Actualiza e inténtalo de nuevo.',
+        });
+      }
       await tx.checkIn.create({
         data: { reservationId: id, userId: user.id, method: dto.method ?? 'BUTTON' },
       });
-      await tx.reservation.update({ where: { id }, data: { status: Status.CHECKED_IN } });
       await this.audit.log(
         { userId: user.id, action: 'RESERVATION_CHECKED_IN', entity: 'Reservation', entityId: id },
         tx,
