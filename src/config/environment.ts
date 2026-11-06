@@ -130,6 +130,9 @@ function crossFieldErrors(env: EnvironmentVariables): string[] {
   if (env.NODE_ENV === 'production' && env.DEMO_LOGIN_ENABLED) {
     errors.push('DEMO_LOGIN_ENABLED: must be false in production');
   }
+  if (env.NODE_ENV === 'production' && !env.JOB_KEY) {
+    errors.push('JOB_KEY: is required in production');
+  }
   return errors;
 }
 

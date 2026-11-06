@@ -15,6 +15,7 @@ function baseEnv(overrides: Record<string, string> = {}): Record<string, string>
 function productionEnv(overrides: Record<string, string> = {}): Record<string, string> {
   return baseEnv({
     NODE_ENV: 'production',
+    JOB_KEY: SECRET,
     ...overrides,
   });
 }
@@ -115,6 +116,12 @@ describe('loadAppConfig', () => {
   it('rejects the demo login in production', () => {
     expect(() => loadAppConfig(productionEnv({ DEMO_LOGIN_ENABLED: 'true' }))).toThrow(
       'DEMO_LOGIN_ENABLED: must be false in production',
+    );
+  });
+
+  it('requires the job key in production', () => {
+    expect(() => loadAppConfig(productionEnv({ JOB_KEY: '' }))).toThrow(
+      'JOB_KEY: is required in production',
     );
   });
 

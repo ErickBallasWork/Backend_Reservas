@@ -35,25 +35,25 @@ npm run start:dev         # API en http://localhost:3001/api/v1
 La API valida todas las variables al arrancar y se niega a iniciar si alguna falta o es inválida. El
 mensaje lista cada problema.
 
-| Variable                   | Obligatoria | Por defecto          | Secreta | Descripción                                                                                      |
-| -------------------------- | ----------- | -------------------- | ------- | ------------------------------------------------------------------------------------------------ |
-| `NODE_ENV`                 | no          | `development`        | no      | `development`, `test` o `production`                                                             |
-| `PORT`                     | no          | `3001`               | no      | Puerto HTTP                                                                                      |
-| `CORS_ORIGINS`             | sí          | —                    | no      | Orígenes del frontend separados por coma, con protocolo                                          |
-| `SWAGGER_ENABLED`          | no          | `true` fuera de prod | no      | `true` o `false`. En producción está apagado salvo que se ponga `true`                           |
-| `TRUST_PROXY_HOPS`         | no          | `0`                  | no      | Proxies delante de la API (en Azure App Service, `1`) para limitar por la IP real del cliente    |
-| `APP_TIME_ZONE`            | no          | `America/Guayaquil`  | no      | Zona IANA para los textos de los avisos                                                          |
-| `DATABASE_URL`             | sí          | —                    | **sí**  | Cadena de conexión de Prisma a SQL Server                                                        |
-| `JWT_SECRET`               | sí          | —                    | **sí**  | Mínimo 32 caracteres. `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
-| `JWT_EXPIRES_MINUTES`      | no          | `15`                 | no      | Duración del access token, de 5 a 120                                                            |
-| `DEVICE_IDLE_DAYS`         | no          | `30`                 | no      | Días sin uso tras los que un dispositivo aprobado vuelve a pedir acceso, de 1 a 90               |
-| `ALLOWED_EMAIL_DOMAINS`    | sí          | —                    | no      | Dominios permitidos separados por coma, por ejemplo `tcs.com,pichincha.com`                      |
-| `DEMO_LOGIN_ENABLED`       | no          | `false`              | no      | `true` habilita `POST /auth/demo` (solo desarrollo). La API no arranca así en producción         |
-| `NOTIFY_CHANNELS`          | no          | vacío                | no      | Canales extra a la bandeja: `PUSH`, `EMAIL` o ambos                                              |
-| `JOB_KEY`                  | no          | —                    | **sí**  | Si se define (mínimo 32), las tareas programadas exigen la cabecera `x-job-key`                  |
-| `NO_SHOW_ENFORCED_FROM`    | no          | —                    | no      | Fecha ISO 8601. El job de inasistencia ignora las reservas que empezaron antes                   |
-| `INITIAL_SUPERADMIN_EMAIL` | solo seed   | —                    | no      | SUPERADMIN que crea `npm run db:seed`                                                            |
-| `INITIAL_SUPERADMIN_NAME`  | solo seed   | el correo            | no      | Nombre del SUPERADMIN inicial                                                                    |
+| Variable                   | Obligatoria   | Por defecto          | Secreta | Descripción                                                                                                                         |
+| -------------------------- | ------------- | -------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                 | no            | `development`        | no      | `development`, `test` o `production`                                                                                                |
+| `PORT`                     | no            | `3001`               | no      | Puerto HTTP                                                                                                                         |
+| `CORS_ORIGINS`             | sí            | —                    | no      | Orígenes del frontend separados por coma, con protocolo                                                                             |
+| `SWAGGER_ENABLED`          | no            | `true` fuera de prod | no      | `true` o `false`. En producción está apagado salvo que se ponga `true`                                                              |
+| `TRUST_PROXY_HOPS`         | no            | `0`                  | no      | Proxies delante de la API (en Azure App Service, `1`) para limitar por la IP real del cliente                                       |
+| `APP_TIME_ZONE`            | no            | `America/Guayaquil`  | no      | Zona IANA para los textos de los avisos                                                                                             |
+| `DATABASE_URL`             | sí            | —                    | **sí**  | Cadena de conexión de Prisma a SQL Server                                                                                           |
+| `JWT_SECRET`               | sí            | —                    | **sí**  | Mínimo 32 caracteres. `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`                                    |
+| `JWT_EXPIRES_MINUTES`      | no            | `15`                 | no      | Duración del access token, de 5 a 120                                                                                               |
+| `DEVICE_IDLE_DAYS`         | no            | `30`                 | no      | Días sin uso tras los que un dispositivo aprobado vuelve a pedir acceso, de 1 a 90                                                  |
+| `ALLOWED_EMAIL_DOMAINS`    | sí            | —                    | no      | Dominios permitidos separados por coma, por ejemplo `tcs.com,pichincha.com`                                                         |
+| `DEMO_LOGIN_ENABLED`       | no            | `false`              | no      | `true` habilita `POST /auth/demo` (solo desarrollo). La API no arranca así en producción                                            |
+| `NOTIFY_CHANNELS`          | no            | vacío                | no      | Canales extra a la bandeja: `PUSH`, `EMAIL` o ambos                                                                                 |
+| `JOB_KEY`                  | en producción | —                    | **sí**  | Mínimo 32. Las tareas programadas exigen la cabecera `x-job-key`. Debe ser igual al secret `JOB_KEY` del workflow `no-show-job.yml` |
+| `NO_SHOW_ENFORCED_FROM`    | no            | —                    | no      | Fecha ISO 8601. El job de inasistencia ignora las reservas que empezaron antes                                                      |
+| `INITIAL_SUPERADMIN_EMAIL` | solo seed     | —                    | no      | SUPERADMIN que crea `npm run db:seed`                                                                                               |
+| `INITIAL_SUPERADMIN_NAME`  | solo seed     | el correo            | no      | Nombre del SUPERADMIN inicial                                                                                                       |
 
 Las reglas de reserva (franjas de 30 min, 24 h de anticipación, 48 h máximo, ventana de check-in) ya no
 van en el entorno: viven en `src/config/reservation-rules.service.ts` y más adelante se administrarán
