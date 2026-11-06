@@ -1,20 +1,36 @@
-// Modelo de datos del sistema de reservas en SQLite (Base de datos embebida local).
+// Modelo de datos del sistema de reservas (SQL Server: local en Docker o Azure SQL).
+//
+// Basado en el diagrama del equipo de base de datos, con estas correcciones:
+//  - Las laptops son filas de RESOURCE (Type = LAPTOP) con ParentResourceId = su laboratorio.
+//    Así RESERVATION y RESERVATION_SLOT apuntan siempre a RESOURCE con una llave foránea real.
+//  - RESERVATION_SLOT tiene la clave única (ResourceId, SlotStart): impide las dobles reservas.
+//  - USER_ROLE.BuildingId (SPOC de Edificio por edificio), USERS.Department (reportes),
+//    SANCTION.ResolvedById/ResolvedAt (quién regularizó), AUDIT_LOG.Details y UserId opcional,
+//    REALLOCATION con horario anterior y nuevo, y la tabla USERS (USER es palabra reservada).
+//
+// Notas de Prisma con SQL Server:
+//  - Los modelos usan nombres en inglés para el código y @@map / @map para los nombres reales
+//    de tablas y columnas en la base (BUILDING, Id, BuildingId...).
+//  - SQL Server no admite enums en Prisma: tipos y estados son texto validado en el código
+//    (src/common/constants.ts).
+//  - Todas las relaciones usan NoAction: SQL Server rechaza "múltiples caminos de cascada" y
+//    en este sistema nada se borra (se inactiva).
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "sqlserver"
   url      = env("DATABASE_URL")
 }
 
 // ---------------- Catálogo ----------------
 
 model Building {
-  id        String   @id @default(uuid()) @map("Id")
-  name      String   @unique @map("Name")
-  address   String?  @map("Address")
+  id        String   @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  name      String   @unique @map("Name") @db.NVarChar(150)
+  address   String?  @map("Address") @db.NVarChar(300)
   isActive  Boolean  @default(true) @map("IsActive")
   createdAt DateTime @default(now()) @map("CreatedAt")
 
@@ -26,18 +42,18 @@ model Building {
 
 // Salas de reuniones, laboratorios de IA y laptops (las laptops cuelgan de su laboratorio).
 model Resource {
-  id               String   @id @default(uuid()) @map("Id")
-  buildingId       String   @map("BuildingId")
+  id               String   @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  buildingId       String   @map("BuildingId") @db.UniqueIdentifier
   // Solo laptops: id del laboratorio de IA al que pertenecen
-  parentResourceId String?  @map("ParentResourceId")
+  parentResourceId String?  @map("ParentResourceId") @db.UniqueIdentifier
   // MEETING_ROOM | AI_LAB | LAPTOP
-  type             String   @map("Type")
-  name             String   @map("Name")
+  type             String   @map("Type") @db.NVarChar(20)
+  name             String   @map("Name") @db.NVarChar(150)
   capacity         Int      @default(1) @map("Capacity")
-  equipment        String?  @map("Equipment")
-  rules            String?  @map("Rules")
+  equipment        String?  @map("Equipment") @db.NVarChar(500)
+  rules            String?  @map("Rules") @db.NVarChar(500)
   // Solo laptops: código de inventario
-  assetTag         String?  @map("AssetTag")
+  assetTag         String?  @map("AssetTag") @db.NVarChar(50)
   isActive         Boolean  @default(true) @map("IsActive")
   createdAt        DateTime @default(now()) @map("CreatedAt")
 
@@ -58,11 +74,12 @@ model Resource {
 // ---------------- Usuarios y roles ----------------
 
 model User {
-  id          String    @id @default(uuid()) @map("Id")
-  email       String    @unique @map("Email")
-  fullName    String    @map("FullName")
-  department  String?   @map("Department")
-  tenantId    String?   @map("TenantId")
+  id          String    @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  email       String    @unique @map("Email") @db.NVarChar(320)
+  fullName    String    @map("FullName") @db.NVarChar(200)
+  department  String?   @map("Department") @db.NVarChar(120)
+  // Organización de la cuenta: dominio de Google Workspace o tenant de Entra ID (si aplica)
+  tenantId    String?   @map("TenantId") @db.NVarChar(100)
   isActive    Boolean   @default(true) @map("IsActive")
   lastLoginAt DateTime? @map("LastLoginAt")
   createdAt   DateTime  @default(now()) @map("CreatedAt")
@@ -83,17 +100,18 @@ model User {
 // ASOCIADO | ADMIN | SPOC_ADMIN | LIDER | SPOC_EDIFICIO (se cargan con el seed)
 model Role {
   id    Int        @id @default(autoincrement()) @map("Id")
-  name  String     @unique @map("Name")
+  name  String     @unique @map("Name") @db.NVarChar(30)
   users UserRole[]
 
   @@map("ROLE")
 }
 
 model UserRole {
-  id         String  @id @default(uuid()) @map("Id")
-  userId     String  @map("UserId")
+  id         String  @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  userId     String  @map("UserId") @db.UniqueIdentifier
   roleId     Int     @map("RoleId")
-  buildingId String? @map("BuildingId")
+  // Solo SPOC_EDIFICIO: edificio que administra
+  buildingId String? @map("BuildingId") @db.UniqueIdentifier
 
   user     User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   role     Role      @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -106,15 +124,20 @@ model UserRole {
 // ---------------- Reservas ----------------
 
 model Reservation {
-  id              String   @id @default(uuid()) @map("Id")
-  userId          String   @map("UserId")
-  resourceId      String   @map("ResourceId")
-  reservationType String   @map("ReservationType")
-  purpose         String   @map("Purpose")
-  justification   String   @map("Justification")
+  id              String   @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  userId          String   @map("UserId") @db.UniqueIdentifier
+  // Sala, laboratorio (reserva completa) o laptop
+  resourceId      String   @map("ResourceId") @db.UniqueIdentifier
+  // ROOM | FULL_LAB | LAPTOP
+  reservationType String   @map("ReservationType") @db.NVarChar(20)
+  // Motivo: INTERNAL_MEETING | CLIENT_MEETING | TRAINING
+  purpose         String   @map("Purpose") @db.NVarChar(30)
+  // Detalle o justificación del motivo (RF-07)
+  justification   String   @map("Justification") @db.NVarChar(1000)
   startDateTime   DateTime @map("StartDateTime")
   endDateTime     DateTime @map("EndDateTime")
-  status          String   @map("Status")
+  // PENDING_APPROVAL | CONFIRMED | REJECTED | CANCELLED | CHECKED_IN | NO_SHOW
+  status          String   @map("Status") @db.NVarChar(20)
   createdAt       DateTime @default(now()) @map("CreatedAt")
   updatedAt       DateTime @updatedAt @map("UpdatedAt")
 
@@ -132,10 +155,12 @@ model Reservation {
   @@map("RESERVATION")
 }
 
+// Franjas ocupadas. Una reserva de 10:00 a 11:00 con franjas de 30 min crea 2 filas por recurso.
+// La clave única (ResourceId, SlotStart) hace que la base rechace cualquier doble reserva.
 model ReservationSlot {
-  id            String   @id @default(uuid()) @map("Id")
-  reservationId String   @map("ReservationId")
-  resourceId    String   @map("ResourceId")
+  id            String   @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  reservationId String   @map("ReservationId") @db.UniqueIdentifier
+  resourceId    String   @map("ResourceId") @db.UniqueIdentifier
   slotStart     DateTime @map("SlotStart")
   slotEnd       DateTime @map("SlotEnd")
 
@@ -149,11 +174,12 @@ model ReservationSlot {
 }
 
 model CheckIn {
-  id            String   @id @default(uuid()) @map("Id")
-  reservationId String   @unique @map("ReservationId")
-  userId        String   @map("UserId")
+  id            String   @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  reservationId String   @unique @map("ReservationId") @db.UniqueIdentifier
+  userId        String   @map("UserId") @db.UniqueIdentifier
   checkInDate   DateTime @default(now()) @map("CheckInDate")
-  method        String   @map("Method")
+  // BUTTON | QR
+  method        String   @map("Method") @db.NVarChar(20)
 
   reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   user        User        @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -164,11 +190,12 @@ model CheckIn {
 // ---------------- Aprobaciones, reasignaciones y sanciones ----------------
 
 model Approval {
-  id            String   @id @default(uuid()) @map("Id")
-  reservationId String   @map("ReservationId")
-  approverId    String   @map("ApproverId")
-  status        String   @map("Status")
-  comments      String?  @map("Comments")
+  id            String   @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  reservationId String   @map("ReservationId") @db.UniqueIdentifier
+  approverId    String   @map("ApproverId") @db.UniqueIdentifier
+  // APPROVED | REJECTED
+  status        String   @map("Status") @db.NVarChar(10)
+  comments      String?  @map("Comments") @db.NVarChar(1000)
   decisionDate  DateTime @default(now()) @map("DecisionDate")
 
   reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -179,16 +206,16 @@ model Approval {
 }
 
 model Reallocation {
-  id                    String   @id @default(uuid()) @map("Id")
-  reservationId         String   @map("ReservationId")
-  previousResourceId    String   @map("PreviousResourceId")
-  newResourceId         String   @map("NewResourceId")
-  responsibleUserId     String   @map("ResponsibleUserId")
+  id                    String   @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  reservationId         String   @map("ReservationId") @db.UniqueIdentifier
+  previousResourceId    String   @map("PreviousResourceId") @db.UniqueIdentifier
+  newResourceId         String   @map("NewResourceId") @db.UniqueIdentifier
+  responsibleUserId     String   @map("ResponsibleUserId") @db.UniqueIdentifier
   previousStartDateTime DateTime @map("PreviousStartDateTime")
   previousEndDateTime   DateTime @map("PreviousEndDateTime")
   newStartDateTime      DateTime @map("NewStartDateTime")
   newEndDateTime        DateTime @map("NewEndDateTime")
-  justification         String   @map("Justification")
+  justification         String   @map("Justification") @db.NVarChar(1000)
   reallocationDate      DateTime @default(now()) @map("ReallocationDate")
 
   reservation      Reservation @relation(fields: [reservationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -201,15 +228,18 @@ model Reallocation {
 }
 
 model Sanction {
-  id            String    @id @default(uuid()) @map("Id")
-  userId        String    @map("UserId")
-  reservationId String    @map("ReservationId")
-  type          String    @default("NO_SHOW") @map("Type")
-  reason        String    @map("Reason")
+  id            String    @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  userId        String    @map("UserId") @db.UniqueIdentifier
+  reservationId String    @map("ReservationId") @db.UniqueIdentifier
+  // NO_SHOW
+  type          String    @default("NO_SHOW") @map("Type") @db.NVarChar(20)
+  reason        String    @map("Reason") @db.NVarChar(300)
   startDate     DateTime  @default(now()) @map("StartDate")
+  // Vacío mientras esté activa: dura hasta que un Administrador la regularice (RF-12)
   endDate       DateTime? @map("EndDate")
-  status        String    @map("Status")
-  resolvedById  String?   @map("ResolvedById")
+  // ACTIVE | RESOLVED
+  status        String    @map("Status") @db.NVarChar(10)
+  resolvedById  String?   @map("ResolvedById") @db.UniqueIdentifier
   resolvedAt    DateTime? @map("ResolvedAt")
 
   user        User        @relation("SanctionUser", fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -222,15 +252,19 @@ model Sanction {
 
 // ---------------- Notificaciones y auditoría ----------------
 
+// Un aviso por canal. IN_APP es la bandeja del sistema (canal por defecto); PUSH y EMAIL
+// quedan como envíos pendientes (Status = PENDING) hasta que una tarea los procese.
 model Notification {
-  id        String    @id @default(uuid()) @map("Id")
-  userId    String    @map("UserId")
-  channel   String    @default("IN_APP") @map("Channel")
-  type      String    @map("Type")
-  title     String    @map("Title")
-  message   String    @map("Message")
+  id        String    @id @default(uuid()) @map("Id") @db.UniqueIdentifier
+  userId    String    @map("UserId") @db.UniqueIdentifier
+  // IN_APP | PUSH | EMAIL
+  channel   String    @default("IN_APP") @map("Channel") @db.NVarChar(10)
+  type      String    @map("Type") @db.NVarChar(40)
+  title     String    @map("Title") @db.NVarChar(200)
+  message   String    @map("Message") @db.NVarChar(1000)
   isRead    Boolean   @default(false) @map("IsRead")
-  status    String    @default("SENT") @map("Status")
+  // PENDING | SENT | FAILED
+  status    String    @default("SENT") @map("Status") @db.NVarChar(10)
   attempts  Int       @default(0) @map("Attempts")
   sentAt    DateTime? @map("SentAt")
   createdAt DateTime  @default(now()) @map("CreatedAt")
@@ -242,13 +276,16 @@ model Notification {
   @@map("NOTIFICATION")
 }
 
+// Solo inserción: el usuario de la aplicación no debe poder editar ni borrar (docs/sql).
 model AuditLog {
-  id        Int      @id @default(autoincrement()) @map("Id")
-  userId    String?  @map("UserId")
-  action    String   @map("Action")
-  entity    String   @map("Entity")
-  entityId  String?  @map("EntityId")
-  details   String?  @map("Details")
+  id        BigInt   @id @default(autoincrement()) @map("Id")
+  // Vacío cuando la acción la hace una tarea automática (por ejemplo, el No-Show)
+  userId    String?  @map("UserId") @db.UniqueIdentifier
+  action    String   @map("Action") @db.NVarChar(60)
+  entity    String   @map("Entity") @db.NVarChar(60)
+  entityId  String?  @map("EntityId") @db.NVarChar(60)
+  // Qué cambió (antes y después) en JSON
+  details   String?  @map("Details") @db.NVarChar(Max)
   eventDate DateTime @default(now()) @map("EventDate")
 
   user User? @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
