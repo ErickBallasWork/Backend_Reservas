@@ -65,5 +65,9 @@ export type AccessRequestStatus = (typeof ACCESS_REQUEST_STATUSES)[number];
 export const ACCESS_REQUEST_COOLDOWN_DAYS = 7;
 
 export const SANCTION_STATUSES = ['ACTIVE', 'RESOLVED'] as const;
+export type SanctionStatus = (typeof SANCTION_STATUSES)[number];
+
+export const SANCTION_TYPES = ['NO_SHOW'] as const;
+export type SanctionType = (typeof SANCTION_TYPES)[number];
 
 export const CHECK_IN_METHODS = ['BUTTON', 'QR'] as const;

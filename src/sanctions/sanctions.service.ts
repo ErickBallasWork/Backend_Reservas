@@ -14,6 +14,34 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListSanctionsQueryDto, ResolveSanctionDto } from './dto/sanction.dto';
 
+const SANCTION_INCLUDE = {
+  user: { select: { id: true, fullName: true, email: true } },
+  resolvedBy: { select: { id: true, fullName: true } },
+  reservation: {
+    select: {
+      id: true,
+      startDateTime: true,
+      endDateTime: true,
+      resource: { select: { name: true } },
+    },
+  },
+} satisfies Prisma.SanctionInclude;
+
+type SanctionRow = Prisma.SanctionGetPayload<{ include: typeof SANCTION_INCLUDE }>;
+
+function toSanctionView(row: SanctionRow) {
+  const { reservation, ...rest } = row;
+  return {
+    ...rest,
+    reservation: {
+      id: reservation.id,
+      startDateTime: reservation.startDateTime,
+      endDateTime: reservation.endDateTime,
+      resourceName: reservation.resource.name,
+    },
+  };
+}
+
 @Injectable()
 export class SanctionsService {
   constructor(
@@ -134,27 +162,16 @@ export class SanctionsService {
       ...(query.status ? { status: query.status } : {}),
       ...(query.userId ? { userId: query.userId } : {}),
     };
-    const [items, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       this.prisma.sanction.findMany({
         where,
-        include: {
-          user: { select: { id: true, fullName: true, email: true } },
-          resolvedBy: { select: { id: true, fullName: true } },
-          reservation: {
-            select: {
-              id: true,
-              startDateTime: true,
-              endDateTime: true,
-              resource: { select: { name: true } },
-            },
-          },
-        },
+        include: SANCTION_INCLUDE,
         orderBy: { startDate: 'desc' },
         ...toSkipTake(query),
       }),
       this.prisma.sanction.count({ where }),
     ]);
-    return { total, page: query.page, pageSize: query.pageSize, items };
+    return { total, page: query.page, pageSize: query.pageSize, items: rows.map(toSanctionView) };
   }
 
   async resolve(admin: CurrentUserData, id: string, dto: ResolveSanctionDto) {
@@ -176,6 +193,7 @@ export class SanctionsService {
       const resolved = await tx.sanction.update({
         where: { id },
         data: { status: 'RESOLVED', endDate: now, resolvedById: admin.id, resolvedAt: now },
+        include: SANCTION_INCLUDE,
       });
       await this.notifications.notify(
         {
@@ -196,7 +214,7 @@ export class SanctionsService {
         },
         tx,
       );
-      return resolved;
+      return toSanctionView(resolved);
     });
   }
 }
